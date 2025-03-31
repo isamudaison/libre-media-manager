@@ -1,28 +1,20 @@
 package net.creft.lmm.response;
 
+import net.creft.lmm.model.Media;
+
 public class MediaResponse {
 
-    private String mediaId;
-    private String title;
+    private Media media;
 
-    public MediaResponse(String mediaId, String title) {
-        this.mediaId = mediaId;
-        this.title = title;
+    public MediaResponse(Media media) {
+        this.media = media;
     }
 
-    public String getMediaId() {
-        return mediaId;
+    public Media getMedia() {
+        return media;
     }
 
-    public void setMediaId(String mediaId) {
-        this.mediaId = mediaId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
+    public void setMedia(Media media) {
+        this.media = media;
     }
 }
