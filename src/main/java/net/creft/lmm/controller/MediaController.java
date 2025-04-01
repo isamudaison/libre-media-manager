@@ -20,16 +20,15 @@ public class MediaController {
     }
 
     @GetMapping("/media/{mediaId}")
-    public MediaResponse getMedia(@PathVariable String mediaId) {
+    public ResponseEntity<Media> getMedia(@PathVariable String mediaId) {
 
         // Try to find the media by its mediaId in the database
         Media media = mediaRepository.findByMediaId(mediaId);
         if (media == null) {
-            // For simplicity, if not found, create a new entry (or handle accordingly)
-            media = new Media(mediaId, "Test");
-            mediaRepository.save(media);
+            // If the media isn't found, return a 404 Not Found
+            return ResponseEntity.notFound().build();
         }
-        return new MediaResponse(media);
+        return ResponseEntity.status(HttpStatus.OK).body(media);
     }
 
     // New POST endpoint for creating media
@@ -44,6 +43,18 @@ public class MediaController {
 
         // Return the created media with HTTP status 201 Created
         return ResponseEntity.status(HttpStatus.CREATED).body(savedMedia);
+    }
+
+    @DeleteMapping("/media/{mediaId}")
+    public ResponseEntity<Void> deleteMedia(@PathVariable String mediaId) {
+        Media media = mediaRepository.findByMediaId(mediaId);
+        if (media == null) {
+            // If the media isn't found, return a 404 Not Found
+            return ResponseEntity.notFound().build();
+        }
+        mediaRepository.delete(media);
+        // Return a 204 No Content to indicate successful deletion
+        return ResponseEntity.noContent().build();
     }
 
 
