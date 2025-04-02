@@ -1,9 +1,11 @@
 package net.creft.lmm.controller;
 
 import net.creft.lmm.dto.CreateMediaRequest;
+import net.creft.lmm.dto.UpdateMediaRequest;
 import net.creft.lmm.model.Media;
 import net.creft.lmm.repository.MediaRepository;
-import net.creft.lmm.response.MediaResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +14,7 @@ import java.util.UUID;
 
 @RestController
 public class MediaController {
+    private static final Logger logger = LoggerFactory.getLogger(MediaController.class);
 
     private final MediaRepository mediaRepository;
 
@@ -22,8 +25,7 @@ public class MediaController {
     @GetMapping("/media/{mediaId}")
     public ResponseEntity<Media> getMedia(@PathVariable String mediaId) {
 
-        // Try to find the media by its mediaId in the database
-        Media media = mediaRepository.findByMediaId(mediaId);
+        Media media = fetchMedia(mediaId);
         if (media == null) {
             // If the media isn't found, return a 404 Not Found
             return ResponseEntity.notFound().build();
@@ -45,9 +47,23 @@ public class MediaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(savedMedia);
     }
 
+    @PutMapping("/media/{mediaId}")
+    public ResponseEntity<Media> updateMedia(@PathVariable String mediaId,
+                                             @RequestBody UpdateMediaRequest updateRequest) {
+        Media existingMedia = fetchMedia(mediaId);
+        if (existingMedia == null) {
+            return ResponseEntity.notFound().build();
+        }
+        // Update the title
+        existingMedia.setTitle(updateRequest.getTitle());
+        Media updatedMedia = mediaRepository.save(existingMedia);
+        return ResponseEntity.ok(updatedMedia);
+    }
+
     @DeleteMapping("/media/{mediaId}")
     public ResponseEntity<Void> deleteMedia(@PathVariable String mediaId) {
-        Media media = mediaRepository.findByMediaId(mediaId);
+        Media media = fetchMedia(mediaId);
+
         if (media == null) {
             // If the media isn't found, return a 404 Not Found
             return ResponseEntity.notFound().build();
@@ -55,6 +71,18 @@ public class MediaController {
         mediaRepository.delete(media);
         // Return a 204 No Content to indicate successful deletion
         return ResponseEntity.noContent().build();
+    }
+
+    private Media fetchMedia(String mediaId){
+        logger.debug("Fetching media with ID: {}", mediaId);
+        // Try to find the media by its mediaId in the database
+        Media media = mediaRepository.findByMediaId(mediaId);
+        if (media == null) {
+            logger.info("No media with ID: {}", mediaId);
+        }
+        logger.info("Fetched media with ID: {}", mediaId);
+
+        return media;
     }
 
 
