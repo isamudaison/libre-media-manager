@@ -1,0 +1,195 @@
+{
+  "metadata": {
+    "project": "libre-media-manager",
+    "last_updated": "2026-03-09",
+    "intended_consumers": [
+      "ai_agent",
+      "human_developer"
+    ]
+  },
+  "project_intent": "Build a Spring Boot backend service for managing media records with CRUD HTTP endpoints (/media), backed by Spring Data JPA.",
+  "baseline_status": {
+    "test_command": "./mvnw test",
+    "result": "pass",
+    "tests_run": 22,
+    "failures": 0
+  },
+  "todos": [
+    {
+      "id": "TODO-001",
+      "priority": "P0",
+      "title": "Add request validation for create/update payloads",
+      "details": "Require title and add length bounds using Bean Validation. Completed 2026-03-09: added @Valid and Bean Validation constraints for create/update payloads with explicit 400 error responses for validation and malformed JSON.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/dto/CreateMediaRequest.java",
+        "src/main/java/net/creft/lmm/dto/UpdateMediaRequest.java",
+        "src/main/java/net/creft/lmm/controller/MediaController.java"
+      ],
+      "acceptance_criteria": [
+        "Invalid payloads return HTTP 400.",
+        "Validation errors include clear field-level messages.",
+        "Tests cover invalid and malformed request bodies."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-002",
+      "priority": "P0",
+      "title": "Enforce DB integrity constraints on Media",
+      "details": "Ensure mediaId is unique and non-null, and title is non-null. Completed 2026-03-09: added JPA column constraints and repository tests covering duplicate mediaId and null constrained fields.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/model/Media.java"
+      ],
+      "acceptance_criteria": [
+        "Duplicate mediaId is rejected at persistence layer.",
+        "Null title cannot be persisted."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-003",
+      "priority": "P1",
+      "title": "Introduce a service layer",
+      "details": "Move business/persistence flow out of controller into dedicated service class(es). Completed 2026-03-09: added MediaService/MediaServiceImpl, moved CRUD persistence/business logic from MediaController, and added service unit tests for CRUD plus not-found paths.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "src/main/java/net/creft/lmm/service/"
+      ],
+      "acceptance_criteria": [
+        "Controller methods are thin and delegate to service.",
+        "Service unit tests cover CRUD business behavior."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-004",
+      "priority": "P1",
+      "title": "Add centralized exception handling",
+      "details": "Use @ControllerAdvice and consistent error response schema across failures. Completed 2026-03-09: added @RestControllerAdvice with stable ApiErrorResponse contract for validation, malformed JSON, not-found, and sanitized unhandled exceptions; removed per-controller exception handling and added MVC tests for contract paths.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/exception/"
+      ],
+      "acceptance_criteria": [
+        "Validation and runtime errors share a stable JSON contract.",
+        "Unhandled exceptions return sanitized responses."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-005",
+      "priority": "P1",
+      "title": "Add GET /media list endpoint with pagination",
+      "details": "Support page/size and optional sorting/filtering.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "src/main/java/net/creft/lmm/repository/MediaRepository.java"
+      ],
+      "acceptance_criteria": [
+        "Clients can retrieve paginated media lists.",
+        "Endpoint behavior is covered by controller/integration tests."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-006",
+      "priority": "P1",
+      "title": "Use explicit response DTOs instead of returning entities",
+      "details": "Avoid exposing JPA entities directly from API responses.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "src/main/java/net/creft/lmm/response/"
+      ],
+      "acceptance_criteria": [
+        "Controller returns response DTOs only.",
+        "Entity internals are not leaked in API contract."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-007",
+      "priority": "P2",
+      "title": "Remove or adopt MediaResponse consistently",
+      "details": "Current MediaResponse model exists but is not used by controller responses.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/response/MediaResponse.java"
+      ],
+      "acceptance_criteria": [
+        "No dead response models remain.",
+        "Response format decision is applied consistently."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-008",
+      "priority": "P2",
+      "title": "Fix fetchMedia logging semantics",
+      "details": "Ensure success/failure logs are accurate and not contradictory.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/controller/MediaController.java"
+      ],
+      "acceptance_criteria": [
+        "Success log appears only on actual hit.",
+        "Not-found path logs a single clear miss message."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-009",
+      "priority": "P1",
+      "title": "Expand controller test coverage for missing negative cases",
+      "details": "Add tests for GET not-found, validation failures, and malformed payloads.",
+      "key_files": [
+        "src/test/java/net/creft/lmm/controller/MediaControllerTest.java"
+      ],
+      "acceptance_criteria": [
+        "Negative paths are explicitly tested.",
+        "Error response contract is asserted in tests."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-010",
+      "priority": "P1",
+      "title": "Add integration tests with real JPA/H2",
+      "details": "Use full Spring context tests to validate persistence + API flow.",
+      "key_files": [
+        "src/test/java/net/creft/lmm/"
+      ],
+      "acceptance_criteria": [
+        "End-to-end CRUD scenarios pass against in-memory DB.",
+        "Tests do not rely only on mocked repository behavior."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-011",
+      "priority": "P2",
+      "title": "Add profiles and schema migration tooling",
+      "details": "Introduce environment-specific config and schema versioning for non-memory DB use.",
+      "key_files": [
+        "src/main/resources/application.properties",
+        "pom.xml",
+        "src/main/resources/db/migration/"
+      ],
+      "acceptance_criteria": [
+        "Separate local/dev/prod config exists.",
+        "Schema changes are versioned and repeatable."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-012",
+      "priority": "P2",
+      "title": "Improve README",
+      "details": "Document setup, run/test commands, API endpoints, and examples.",
+      "key_files": [
+        "README.md"
+      ],
+      "acceptance_criteria": [
+        "New contributor can run app and tests from docs alone.",
+        "API usage examples are present and accurate."
+      ],
+      "status": "pending"
+    }
+  ]
+}

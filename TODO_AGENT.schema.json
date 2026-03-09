@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://libre-media-manager.local/schemas/todo-agent.schema.json",
+  "title": "Todo Agent Backlog",
+  "description": "Schema for machine-readable AI/human backlog planning files.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "metadata",
+    "project_intent",
+    "baseline_status",
+    "todos"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project",
+        "last_updated",
+        "intended_consumers"
+      ],
+      "properties": {
+        "project": {
+          "type": "string",
+          "minLength": 1
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date"
+        },
+        "intended_consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "project_intent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseline_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_command",
+        "result",
+        "tests_run",
+        "failures"
+      ],
+      "properties": {
+        "test_command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ]
+        },
+        "tests_run": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "todos": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/todoItem"
+      }
+    }
+  },
+  "$defs": {
+    "todoItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "priority",
+        "title",
+        "details",
+        "key_files",
+        "acceptance_criteria",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^TODO-[0-9]{3}$"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "in_progress",
+            "blocked",
+            "done"
+          ]
+        }
+      }
+    }
+  }
+}
