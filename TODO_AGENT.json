@@ -1,17 +1,17 @@
 {
   "metadata": {
     "project": "libre-media-manager",
-    "last_updated": "2026-03-09",
+    "last_updated": "2026-03-29",
     "intended_consumers": [
       "ai_agent",
       "human_developer"
     ]
   },
-  "project_intent": "Build a Spring Boot backend service for managing media records with CRUD HTTP endpoints (/media), backed by Spring Data JPA.",
+  "project_intent": "Build a Spring Boot backend service for managing media metadata, media relationships, and playback-oriented resource references for a local-first media library frontend.",
   "baseline_status": {
     "test_command": "./mvnw test",
     "result": "pass",
-    "tests_run": 22,
+    "tests_run": 38,
     "failures": 0
   },
   "todos": [
@@ -79,37 +79,43 @@
       "id": "TODO-005",
       "priority": "P1",
       "title": "Add GET /media list endpoint with pagination",
-      "details": "Support page/size and optional sorting/filtering.",
+      "details": "Support page/size and optional sorting/filtering. Completed 2026-03-29: added paginated GET /media with Spring Pageable support, optional case-insensitive title filtering, explicit page response DTOs, controller coverage, and end-to-end integration coverage.",
       "key_files": [
         "src/main/java/net/creft/lmm/controller/MediaController.java",
-        "src/main/java/net/creft/lmm/repository/MediaRepository.java"
+        "src/main/java/net/creft/lmm/repository/MediaRepository.java",
+        "src/main/java/net/creft/lmm/service/MediaService.java",
+        "src/main/java/net/creft/lmm/service/MediaServiceImpl.java",
+        "src/main/java/net/creft/lmm/response/MediaPageResponse.java",
+        "src/test/java/net/creft/lmm/controller/MediaControllerTest.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
       ],
       "acceptance_criteria": [
         "Clients can retrieve paginated media lists.",
         "Endpoint behavior is covered by controller/integration tests."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-006",
       "priority": "P1",
       "title": "Use explicit response DTOs instead of returning entities",
-      "details": "Avoid exposing JPA entities directly from API responses.",
+      "details": "Avoid exposing JPA entities directly from API responses. Completed 2026-03-29: item endpoints now return MediaResponse DTOs and list responses use MediaPageResponse, removing entity exposure from the HTTP contract.",
       "key_files": [
         "src/main/java/net/creft/lmm/controller/MediaController.java",
-        "src/main/java/net/creft/lmm/response/"
+        "src/main/java/net/creft/lmm/response/MediaResponse.java",
+        "src/main/java/net/creft/lmm/response/MediaPageResponse.java"
       ],
       "acceptance_criteria": [
         "Controller returns response DTOs only.",
         "Entity internals are not leaked in API contract."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-007",
       "priority": "P2",
       "title": "Remove or adopt MediaResponse consistently",
-      "details": "Current MediaResponse model exists but is not used by controller responses.",
+      "details": "Current MediaResponse model exists but is not used by controller responses. Completed 2026-03-29: repurposed MediaResponse into the canonical flattened response DTO and used it consistently across item and page responses.",
       "key_files": [
         "src/main/java/net/creft/lmm/response/MediaResponse.java"
       ],
@@ -117,27 +123,27 @@
         "No dead response models remain.",
         "Response format decision is applied consistently."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-008",
       "priority": "P2",
       "title": "Fix fetchMedia logging semantics",
-      "details": "Ensure success/failure logs are accurate and not contradictory.",
+      "details": "Ensure success/failure logs are accurate and not contradictory. Completed 2026-03-29: fetch logic lives in MediaServiceImpl and now logs only a miss on not-found or a fetch on success, eliminating the earlier contradictory controller logging.",
       "key_files": [
-        "src/main/java/net/creft/lmm/controller/MediaController.java"
+        "src/main/java/net/creft/lmm/service/MediaServiceImpl.java"
       ],
       "acceptance_criteria": [
         "Success log appears only on actual hit.",
         "Not-found path logs a single clear miss message."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-009",
       "priority": "P1",
       "title": "Expand controller test coverage for missing negative cases",
-      "details": "Add tests for GET not-found, validation failures, and malformed payloads.",
+      "details": "Add tests for GET not-found, validation failures, and malformed payloads. Completed 2026-03-29: WebMvc tests now cover GET not-found, validation failures, malformed JSON, sanitized unhandled exceptions, and paginated list behavior.",
       "key_files": [
         "src/test/java/net/creft/lmm/controller/MediaControllerTest.java"
       ],
@@ -145,49 +151,171 @@
         "Negative paths are explicitly tested.",
         "Error response contract is asserted in tests."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-010",
       "priority": "P1",
       "title": "Add integration tests with real JPA/H2",
-      "details": "Use full Spring context tests to validate persistence + API flow.",
+      "details": "Use full Spring context tests to validate persistence + API flow. Completed 2026-03-29: added SpringBoot + MockMvc integration coverage for full CRUD flow and paginated filtered list behavior against H2 and real JPA repositories.",
       "key_files": [
-        "src/test/java/net/creft/lmm/"
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
       ],
       "acceptance_criteria": [
         "End-to-end CRUD scenarios pass against in-memory DB.",
         "Tests do not rely only on mocked repository behavior."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-011",
       "priority": "P2",
       "title": "Add profiles and schema migration tooling",
-      "details": "Introduce environment-specific config and schema versioning for non-memory DB use.",
+      "details": "Introduce environment-specific config and schema versioning for non-memory DB use. Completed 2026-03-29: added Flyway, an initial schema migration, local/test/prod Spring profile files, default local profile selection, and PostgreSQL runtime support for prod deployments.",
       "key_files": [
         "src/main/resources/application.properties",
         "pom.xml",
-        "src/main/resources/db/migration/"
+        "src/main/resources/application-local.properties",
+        "src/main/resources/application-test.properties",
+        "src/main/resources/application-prod.properties",
+        "src/main/resources/db/migration/V1__create_media_table.sql"
       ],
       "acceptance_criteria": [
         "Separate local/dev/prod config exists.",
         "Schema changes are versioned and repeatable."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-012",
       "priority": "P2",
       "title": "Improve README",
-      "details": "Document setup, run/test commands, API endpoints, and examples.",
+      "details": "Document setup, run/test commands, API endpoints, and examples. Completed 2026-03-29: README now covers requirements, profiles, Flyway, run/test commands, endpoint usage, and response formats.",
       "key_files": [
         "README.md"
       ],
       "acceptance_criteria": [
         "New contributor can run app and tests from docs alone.",
         "API usage examples are present and accurate."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-013",
+      "priority": "P1",
+      "title": "Add CI automation",
+      "details": "Run the Maven test suite on every pull request and on pushes to the default branches. Completed 2026-03-29: added a GitHub Actions workflow that checks out the repo, provisions Java 17 with Maven caching, and runs ./mvnw test.",
+      "key_files": [
+        ".github/workflows/ci.yml"
+      ],
+      "acceptance_criteria": [
+        "CI runs ./mvnw test on pull requests.",
+        "CI also runs on pushes to the main development branch."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-014",
+      "priority": "P1",
+      "title": "Add Docker and Postgres runtime packaging",
+      "details": "Provide containerized local and production-style runtime paths. Completed 2026-03-29: added a multi-stage Dockerfile, docker-compose app + Postgres stack, and a .dockerignore for leaner builds.",
+      "key_files": [
+        "Dockerfile",
+        "docker-compose.yml",
+        ".dockerignore"
+      ],
+      "acceptance_criteria": [
+        "Application can be built into a container image.",
+        "Local app + Postgres stack can be started with docker compose."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-015",
+      "priority": "P1",
+      "title": "Harden API pagination and conflict handling",
+      "details": "Cap page size, validate/sanitize sort input, and map persistence conflicts to explicit error responses. Completed 2026-03-29: list endpoint now validates page/size/sort/direction, enforces allowed sort fields and max size, and maps DataIntegrityViolationException to a 409 Conflict contract.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "src/main/java/net/creft/lmm/exception/GlobalExceptionHandler.java",
+        "src/main/java/net/creft/lmm/exception/InvalidRequestParameterException.java",
+        "src/test/java/net/creft/lmm/controller/MediaControllerTest.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
+      ],
+      "acceptance_criteria": [
+        "Page size is capped and invalid paging/sorting input returns HTTP 400 with field errors.",
+        "Persistence conflicts return HTTP 409 with a stable error contract."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-016",
+      "priority": "P2",
+      "title": "Add OpenAPI documentation",
+      "details": "Expose the REST contract through generated OpenAPI metadata so the API is discoverable without reading source code. Completed 2026-03-29: added Springdoc OpenAPI generation for the current endpoints, annotated the controller/DTO contract, documented the local docs endpoint at /v3/api-docs, and added integration coverage for the published spec. The API-only Springdoc starter is used because the Swagger UI starter was not compatible with the current Spring Boot 3.4.4 stack in this project.",
+      "key_files": [
+        "pom.xml",
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "README.md"
+      ],
+      "acceptance_criteria": [
+        "OpenAPI metadata is generated for the current endpoints.",
+        "Developers can view API docs locally at /v3/api-docs."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-017",
+      "priority": "P2",
+      "title": "Clean test/runtime warnings",
+      "details": "Remove the Mockito dynamic-agent warning and reduce noisy debug logs during test execution. Completed 2026-03-29: Surefire now runs Mockito with the Java agent and forces debug=false during tests, the test suite uses a dedicated Logback config to suppress Spring test/bootstrap and Springdoc chatter, repository tests disable SQL echoing, and the test profile reduces routine startup logging.",
+      "key_files": [
+        "pom.xml",
+        "src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker",
+        "src/test/resources/logback-test.xml",
+        "src/main/resources/application.properties",
+        "src/main/resources/application-test.properties",
+        "src/test/java/net/creft/lmm/repository/MediaRepositoryTest.java"
+      ],
+      "acceptance_criteria": [
+        "Test suite runs without the Mockito dynamic-agent warning.",
+        "Default test logs stay focused on failures and key startup events."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-018",
+      "priority": "P2",
+      "title": "Add operational basics",
+      "details": "Introduce health/observability basics such as health endpoints, request correlation, and metrics-friendly dependencies. Completed 2026-03-29: added Spring Boot Actuator, exposed /actuator/health and /actuator/info, enabled health probes, propagated/generated X-Request-Id values with a request-correlation filter, added request IDs to the runtime log pattern, and covered the behavior with integration tests.",
+      "key_files": [
+        "pom.xml",
+        "src/main/resources/application.properties",
+        "src/main/resources/application-test.properties",
+        "src/main/java/net/creft/lmm/config/RequestCorrelationFilter.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
+      ],
+      "acceptance_criteria": [
+        "Health endpoint is available for deployments.",
+        "Requests can be correlated in logs."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-019",
+      "priority": "P2",
+      "title": "Expand the domain model",
+      "details": "Decide which fields a real media item needs beyond mediaId and title, then evolve persistence, DTOs, and tests accordingly. Draft domain spec captured in docs/media-domain-spec.md on 2026-03-29.",
+      "key_files": [
+        "docs/project-spec.md",
+        "docs/media-domain-spec.md",
+        "src/main/java/net/creft/lmm/model/Media.java",
+        "src/main/java/net/creft/lmm/dto/",
+        "src/main/java/net/creft/lmm/response/"
+      ],
+      "acceptance_criteria": [
+        "Media model captures agreed product fields.",
+        "API contract and persistence schema stay aligned."
       ],
       "status": "pending"
     }

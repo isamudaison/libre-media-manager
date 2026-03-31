@@ -5,6 +5,8 @@ import net.creft.lmm.model.Media;
 import net.creft.lmm.repository.MediaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -17,6 +19,15 @@ public class MediaServiceImpl implements MediaService {
 
     public MediaServiceImpl(MediaRepository mediaRepository) {
         this.mediaRepository = mediaRepository;
+    }
+
+    @Override
+    public Page<Media> listMedia(String title, Pageable pageable) {
+        String normalizedTitle = title == null ? null : title.trim();
+        if (normalizedTitle == null || normalizedTitle.isEmpty()) {
+            return mediaRepository.findAll(pageable);
+        }
+        return mediaRepository.findByTitleContainingIgnoreCase(normalizedTitle, pageable);
     }
 
     @Override

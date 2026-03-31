@@ -9,7 +9,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +33,45 @@ class MediaServiceImplTest {
 
     @InjectMocks
     private MediaServiceImpl mediaService;
+
+    @Test
+    void listMedia_WithoutFilter_UsesFindAll() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Media> page = new PageImpl<>(List.of(new Media("media-1", "Title")), pageable, 1);
+        when(mediaRepository.findAll(pageable)).thenReturn(page);
+
+        Page<Media> result = mediaService.listMedia(null, pageable);
+
+        assertEquals(page, result);
+        verify(mediaRepository).findAll(pageable);
+        verify(mediaRepository, never()).findByTitleContainingIgnoreCase(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(Pageable.class));
+    }
+
+    @Test
+    void listMedia_WithBlankFilter_UsesFindAll() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Media> page = new PageImpl<>(List.of(new Media("media-1", "Title")), pageable, 1);
+        when(mediaRepository.findAll(pageable)).thenReturn(page);
+
+        Page<Media> result = mediaService.listMedia("   ", pageable);
+
+        assertEquals(page, result);
+        verify(mediaRepository).findAll(pageable);
+        verify(mediaRepository, never()).findByTitleContainingIgnoreCase(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(Pageable.class));
+    }
+
+    @Test
+    void listMedia_WithFilter_UsesContainingIgnoreCaseQuery() {
+        Pageable pageable = PageRequest.of(1, 5);
+        Page<Media> page = new PageImpl<>(List.of(new Media("media-1", "Filtered Title")), pageable, 1);
+        when(mediaRepository.findByTitleContainingIgnoreCase("Filtered", pageable)).thenReturn(page);
+
+        Page<Media> result = mediaService.listMedia(" Filtered ", pageable);
+
+        assertEquals(page, result);
+        verify(mediaRepository).findByTitleContainingIgnoreCase("Filtered", pageable);
+        verify(mediaRepository, never()).findAll(pageable);
+    }
 
     @Test
     void getMedia_WhenMediaExists_ReturnsMedia() {
