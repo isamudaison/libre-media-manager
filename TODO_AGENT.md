@@ -1,6 +1,6 @@
 # Agent TODOs: libre-media-manager
 
-Last updated: 2026-03-29
+Last updated: 2026-03-30
 
 This file is intended for AI/human agents to quickly understand project intent and execute the highest-value next tasks.
 
@@ -30,7 +30,7 @@ Build a Spring Boot backend service for managing media metadata, media relations
 | TODO-016 | P2 | Add OpenAPI documentation. (`done`) | `pom.xml`, `src/main/java/net/creft/lmm/controller/MediaController.java`, `README.md` | Developers can view generated API docs locally at `/v3/api-docs`. |
 | TODO-017 | P2 | Clean test/runtime warnings. (`done`) | `pom.xml`, `src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker`, `src/test/resources/logback-test.xml`, `src/main/resources/application.properties`, `src/main/resources/application-test.properties` | Test runs are warning-free and less noisy. |
 | TODO-018 | P2 | Add operational basics. (`done`) | `pom.xml`, `src/main/resources/application.properties`, `src/main/resources/application-test.properties`, `src/main/java/net/creft/lmm/config/RequestCorrelationFilter.java`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java` | Health checks and request correlation are available. |
-| TODO-019 | P2 | Expand the domain model. | `docs/project-spec.md`, `docs/media-domain-spec.md`, `src/main/java/net/creft/lmm/model/Media.java`, `src/main/java/net/creft/lmm/dto/`, `src/main/java/net/creft/lmm/response/` | Media schema/API reflect agreed product fields. |
+| TODO-019 | P2 | Expand the domain model. | `docs/project-spec.md`, `docs/media-domain-spec.md`, `docs/taxonomy-spec.md`, `src/main/java/net/creft/lmm/model/Media.java`, `src/main/java/net/creft/lmm/dto/`, `src/main/java/net/creft/lmm/response/` | Media schema/API reflect agreed product fields. |
 
 ## Status Notes
 
@@ -52,8 +52,9 @@ Build a Spring Boot backend service for managing media metadata, media relations
 - `TODO-016`: `done` (2026-03-29). Added generated OpenAPI metadata for the current endpoints, documented the local docs endpoint at `/v3/api-docs`, and added integration coverage for the published contract. The API-only Springdoc starter is used because the Swagger UI starter was not compatible with the current Spring Boot 3.4.4 stack in this project.
 - `TODO-017`: `done` (2026-03-29). Removed the Mockito self-attach warning by running tests with the Mockito Java agent, forced `debug=false` under Surefire so an ambient `DEBUG` environment variable cannot enable noisy Spring Boot debug output during tests, suppressed Spring test/bootstrap and Springdoc chatter with a test-only Logback config, disabled repository-test SQL echoing, and tightened the `test` profile logging. `./mvnw test` remains green and `./mvnw -q test` is silent on success.
 - `TODO-018`: `done` (2026-03-29). Added Spring Boot Actuator health/info endpoints, enabled health probes, propagated or generated `X-Request-Id` values through a request-correlation filter, and included the request ID in the runtime log pattern. Integration tests cover `/actuator/health` plus request ID echo/generation behavior.
+- `TODO-019`: `in progress` (2026-03-30). Added a `MediaFile` child collection to `Media`, expanded it to include `label`, `mimeType`, `sizeBytes`, `durationSeconds`, and `primaryFile`, exposed the richer shape through create/update/read/list API contracts, enforced positive numeric validation plus a single-primary-file rule, and added Flyway migrations `V2__create_media_file_table.sql` and `V3__expand_media_file_table.sql` with persistence/controller/integration test coverage. Broader domain expansion remains pending.
 
 ## Baseline Status
 
 - Test command: `./mvnw test`
-- Result at last scan: PASS (`38` tests, `0` failures)
+- Result at last scan: PASS (`44` tests, `0` failures)

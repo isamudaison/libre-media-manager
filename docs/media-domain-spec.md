@@ -1,9 +1,10 @@
 # Media Domain Model Specification
 
 Status: Draft
-Last updated: 2026-03-29
+Last updated: 2026-03-30
 
 Parent spec: [project-spec.md](/home/isamudaison/Code/libre-media-manager/docs/project-spec.md)
+Related spec: [taxonomy-spec.md](/home/isamudaison/Code/libre-media-manager/docs/taxonomy-spec.md)
 
 ## Purpose
 
@@ -15,6 +16,18 @@ The current implementation stores only:
 
 - `mediaId`
 - `title`
+
+The implementation has now started to introduce a `MediaFile` child collection with:
+
+- `location`
+- `label`
+- `mimeType`
+- `sizeBytes`
+- `durationSeconds`
+- `primaryFile`
+
+That gives the API a useful playback-oriented file model, but broader file and playback-resource
+modeling is still not fully specified.
 
 That is enough for CRUD scaffolding, but not enough for a credible media-management domain.
 
@@ -30,7 +43,7 @@ The recommended v1 scope is:
 
 The recommended v1 does not yet model:
 
-- file assets or storage locations
+- full file asset and playback resource modeling beyond attached `MediaFile` records
 - ingest/transcoding workflows
 - credits/cast/crew
 - seasons, episodes, tracks, or child-item hierarchies

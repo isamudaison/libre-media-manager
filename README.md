@@ -74,12 +74,26 @@ Operational endpoints are exposed under `/actuator`:
 
 Clients can supply an `X-Request-Id` header on any request. If present, the app echoes it back in the response; if absent, the app generates one. Runtime logs include the active request ID as `requestId:<value>` so request flows can be correlated across log lines.
 
+`mediaFiles` are stored in request order. At most one entry may set `primaryFile` to `true`.
+
 ### Create media
 
 ```bash
 curl -X POST http://localhost:8080/media \
   -H 'Content-Type: application/json' \
-  -d '{"title":"Arrival"}'
+  -d '{
+    "title":"Arrival",
+    "mediaFiles":[
+      {
+        "location":"/srv/media/arrival.mkv",
+        "label":"Main Feature",
+        "mimeType":"video/x-matroska",
+        "sizeBytes":7340032000,
+        "durationSeconds":6960,
+        "primaryFile":true
+      }
+    ]
+  }'
 ```
 
 ### List media
@@ -112,7 +126,27 @@ curl -H 'X-Request-Id: req-42' http://localhost:8080/media/<mediaId>
 ```bash
 curl -X PUT http://localhost:8080/media/<mediaId> \
   -H 'Content-Type: application/json' \
-  -d '{"title":"Arrival (Updated)"}'
+  -d '{
+    "title":"Arrival (Updated)",
+    "mediaFiles":[
+      {
+        "location":"/srv/media/arrival-4k.mkv",
+        "label":"4K Remux",
+        "mimeType":"video/x-matroska",
+        "sizeBytes":18340032000,
+        "durationSeconds":6960,
+        "primaryFile":true
+      },
+      {
+        "location":"/srv/media/arrival-commentary.mkv",
+        "label":"Commentary Track",
+        "mimeType":"audio/flac",
+        "sizeBytes":834003200,
+        "durationSeconds":7020,
+        "primaryFile":false
+      }
+    ]
+  }'
 ```
 
 ### Delete media
@@ -134,7 +168,17 @@ Single media responses:
 ```json
 {
   "mediaId": "generated-id",
-  "title": "Arrival"
+  "title": "Arrival",
+  "mediaFiles": [
+    {
+      "location": "/srv/media/arrival.mkv",
+      "label": "Main Feature",
+      "mimeType": "video/x-matroska",
+      "sizeBytes": 7340032000,
+      "durationSeconds": 6960,
+      "primaryFile": true
+    }
+  ]
 }
 ```
 
@@ -145,7 +189,17 @@ Paginated list responses:
   "items": [
     {
       "mediaId": "generated-id",
-      "title": "Arrival"
+      "title": "Arrival",
+      "mediaFiles": [
+        {
+          "location": "/srv/media/arrival.mkv",
+          "label": "Main Feature",
+          "mimeType": "video/x-matroska",
+          "sizeBytes": 7340032000,
+          "durationSeconds": 6960,
+          "primaryFile": true
+        }
+      ]
     }
   ],
   "page": 0,

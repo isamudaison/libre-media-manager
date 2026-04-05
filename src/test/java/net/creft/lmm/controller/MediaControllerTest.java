@@ -1,10 +1,13 @@
 package net.creft.lmm.controller;
 
 import net.creft.lmm.dto.CreateMediaRequest;
+import net.creft.lmm.dto.MediaFileRequest;
 import net.creft.lmm.dto.UpdateMediaRequest;
 import net.creft.lmm.exception.GlobalExceptionHandler;
 import net.creft.lmm.exception.MediaNotFoundException;
 import net.creft.lmm.model.Media;
+import net.creft.lmm.model.MediaFile;
+import net.creft.lmm.service.MediaFileDraft;
 import net.creft.lmm.service.MediaService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -48,8 +51,8 @@ public class MediaControllerTest {
     public void testListMedia_WhenPagedAndFiltered_ReturnsPageResponse() throws Exception {
         PageRequest pageRequest = PageRequest.of(1, 2, Sort.by(Sort.Order.desc("title")));
         List<Media> mediaItems = List.of(
-                new Media("media-1", "First Title"),
-                new Media("media-2", "Second Title")
+                new Media("media-1", "First Title", List.of(new MediaFile("/srv/media/first.mkv"))),
+                new Media("media-2", "Second Title", List.of(new MediaFile("/srv/media/second.mkv")))
         );
         Mockito.when(mediaService.listMedia(Mockito.eq("Title"), Mockito.any(Pageable.class)))
                 .thenReturn(new PageImpl<>(mediaItems, pageRequest, 5));
@@ -64,8 +67,10 @@ public class MediaControllerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.items[0].mediaId").value("media-1"))
                 .andExpect(jsonPath("$.items[0].title").value("First Title"))
+                .andExpect(jsonPath("$.items[0].mediaFiles[0].location").value("/srv/media/first.mkv"))
                 .andExpect(jsonPath("$.items[1].mediaId").value("media-2"))
                 .andExpect(jsonPath("$.items[1].title").value("Second Title"))
+                .andExpect(jsonPath("$.items[1].mediaFiles[0].location").value("/srv/media/second.mkv"))
                 .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.size").value(2))
                 .andExpect(jsonPath("$.totalElements").value(5))
@@ -122,13 +127,14 @@ public class MediaControllerTest {
     @Test
     public void testGetMedia_WhenMediaExists() throws Exception {
         String mediaId = "12345";
-        Media media = new Media(mediaId, "Test");
+        Media media = new Media(mediaId, "Test", List.of(new MediaFile("/srv/media/test.mkv")));
         Mockito.when(mediaService.getMedia(mediaId)).thenReturn(media);
 
         mockMvc.perform(get("/media/{mediaId}", mediaId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
-                .andExpect(jsonPath("$.title").value("Test"));
+                .andExpect(jsonPath("$.title").value("Test"))
+                .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/test.mkv"));
     }
 
     @Test
@@ -161,16 +167,54 @@ public class MediaControllerTest {
 
     @Test
     public void testCreateMedia() throws Exception {
-        CreateMediaRequest request = new CreateMediaRequest("New Title");
-        Media savedMedia = new Media("generated-id", request.getTitle());
-        Mockito.when(mediaService.createMedia(request.getTitle())).thenReturn(savedMedia);
+        CreateMediaRequest request = new CreateMediaRequest(
+                "New Title",
+                List.of(new MediaFileRequest(
+                        "/srv/media/new-title.mkv",
+                        "Main Feature",
+                        "video/x-matroska",
+                        7340032000L,
+                        6960,
+                        true
+                ))
+        );
+        Media savedMedia = new Media(
+                "generated-id",
+                request.getTitle(),
+                List.of(new MediaFile(
+                        "/srv/media/new-title.mkv",
+                        "Main Feature",
+                        "video/x-matroska",
+                        7340032000L,
+                        6960,
+                        true
+                ))
+        );
+        Mockito.when(mediaService.createMedia(
+                        request.getTitle(),
+                        List.of(new MediaFileDraft(
+                                "/srv/media/new-title.mkv",
+                                "Main Feature",
+                                "video/x-matroska",
+                                7340032000L,
+                                6960,
+                                true
+                        ))
+                ))
+                .thenReturn(savedMedia);
 
         mockMvc.perform(post("/media")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.mediaId").value("generated-id"))
-                .andExpect(jsonPath("$.title").value("New Title"));
+                .andExpect(jsonPath("$.title").value("New Title"))
+                .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/new-title.mkv"))
+                .andExpect(jsonPath("$.mediaFiles[0].label").value("Main Feature"))
+                .andExpect(jsonPath("$.mediaFiles[0].mimeType").value("video/x-matroska"))
+                .andExpect(jsonPath("$.mediaFiles[0].sizeBytes").value(7340032000L))
+                .andExpect(jsonPath("$.mediaFiles[0].durationSeconds").value(6960))
+                .andExpect(jsonPath("$.mediaFiles[0].primaryFile").value(true));
     }
 
     @Test
@@ -221,7 +265,7 @@ public class MediaControllerTest {
     @Test
     public void testCreateMedia_WhenPersistenceConflict_ReturnsConflict() throws Exception {
         CreateMediaRequest request = new CreateMediaRequest("New Title");
-        Mockito.when(mediaService.createMedia(request.getTitle()))
+        Mockito.when(mediaService.createMedia(request.getTitle(), List.of()))
                 .thenThrow(new DataIntegrityViolationException("duplicate media"));
 
         mockMvc.perform(post("/media")
@@ -238,16 +282,55 @@ public class MediaControllerTest {
     @Test
     public void testUpdateMedia_WhenMediaExists() throws Exception {
         String mediaId = "12345";
-        UpdateMediaRequest updateRequest = new UpdateMediaRequest("Updated Title");
-        Media updatedMedia = new Media(mediaId, "Updated Title");
-        Mockito.when(mediaService.updateMedia(mediaId, "Updated Title")).thenReturn(updatedMedia);
+        UpdateMediaRequest updateRequest = new UpdateMediaRequest(
+                "Updated Title",
+                List.of(new MediaFileRequest(
+                        "/srv/media/updated-title.mkv",
+                        "Director Commentary",
+                        "video/x-matroska",
+                        1835008000L,
+                        7020,
+                        false
+                ))
+        );
+        Media updatedMedia = new Media(
+                mediaId,
+                "Updated Title",
+                List.of(new MediaFile(
+                        "/srv/media/updated-title.mkv",
+                        "Director Commentary",
+                        "video/x-matroska",
+                        1835008000L,
+                        7020,
+                        false
+                ))
+        );
+        Mockito.when(mediaService.updateMedia(
+                        mediaId,
+                        "Updated Title",
+                        List.of(new MediaFileDraft(
+                                "/srv/media/updated-title.mkv",
+                                "Director Commentary",
+                                "video/x-matroska",
+                                1835008000L,
+                                7020,
+                                false
+                        ))
+                ))
+                .thenReturn(updatedMedia);
 
         mockMvc.perform(put("/media/{mediaId}", mediaId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
-                .andExpect(jsonPath("$.title").value("Updated Title"));
+                .andExpect(jsonPath("$.title").value("Updated Title"))
+                .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/updated-title.mkv"))
+                .andExpect(jsonPath("$.mediaFiles[0].label").value("Director Commentary"))
+                .andExpect(jsonPath("$.mediaFiles[0].mimeType").value("video/x-matroska"))
+                .andExpect(jsonPath("$.mediaFiles[0].sizeBytes").value(1835008000L))
+                .andExpect(jsonPath("$.mediaFiles[0].durationSeconds").value(7020))
+                .andExpect(jsonPath("$.mediaFiles[0].primaryFile").value(false));
     }
 
     @Test
@@ -270,7 +353,7 @@ public class MediaControllerTest {
     @Test
     public void testUpdateMedia_WhenMediaNotFound() throws Exception {
         String mediaId = "nonexistent-id";
-        Mockito.when(mediaService.updateMedia(mediaId, "Updated Title")).thenThrow(new MediaNotFoundException(mediaId));
+        Mockito.when(mediaService.updateMedia(mediaId, "Updated Title", List.of())).thenThrow(new MediaNotFoundException(mediaId));
         UpdateMediaRequest updateRequest = new UpdateMediaRequest("Updated Title");
 
         mockMvc.perform(put("/media/{mediaId}", mediaId)
@@ -282,6 +365,48 @@ public class MediaControllerTest {
                 .andExpect(jsonPath("$.message").value("Media with id 'nonexistent-id' was not found"))
                 .andExpect(jsonPath("$.fieldErrors").isMap())
                 .andExpect(jsonPath("$.fieldErrors").isEmpty());
+    }
+
+    @Test
+    public void testUpdateMedia_WhenMediaFileLocationBlank_ReturnsValidationError() throws Exception {
+        UpdateMediaRequest updateRequest = new UpdateMediaRequest(
+                "Updated Title",
+                List.of(new MediaFileRequest(" "))
+        );
+
+        mockMvc.perform(put("/media/{mediaId}", "12345")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$['fieldErrors']['mediaFiles[0].location']").value("mediaFiles[].location is required"));
+
+        Mockito.verifyNoInteractions(mediaService);
+    }
+
+    @Test
+    public void testCreateMedia_WhenMultiplePrimaryFilesRequested_ReturnsValidationError() throws Exception {
+        CreateMediaRequest request = new CreateMediaRequest(
+                "New Title",
+                List.of(
+                        new MediaFileRequest("/srv/media/new-title.mkv", "Main Feature", "video/x-matroska", 7340032000L, 6960, true),
+                        new MediaFileRequest("/srv/media/new-title-alt.mkv", "Alternate Feature", "video/mp4", 2340032000L, 6960, true)
+                )
+        );
+
+        mockMvc.perform(post("/media")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.mediaFiles")
+                        .value("mediaFiles can contain at most one primaryFile=true entry"));
+
+        Mockito.verifyNoInteractions(mediaService);
     }
 
     @Test

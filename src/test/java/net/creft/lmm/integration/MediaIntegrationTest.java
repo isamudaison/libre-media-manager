@@ -3,6 +3,7 @@ package net.creft.lmm.integration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.creft.lmm.model.Media;
+import net.creft.lmm.model.MediaFile;
 import net.creft.lmm.repository.MediaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -49,13 +52,29 @@ class MediaIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "title": "Arrival"
+                                  "title": "Arrival",
+                                  "mediaFiles": [
+                                    {
+                                      "location": "/srv/media/arrival.mkv",
+                                      "label": "Main Feature",
+                                      "mimeType": "video/x-matroska",
+                                      "sizeBytes": 7340032000,
+                                      "durationSeconds": 6960,
+                                      "primaryFile": true
+                                    }
+                                  ]
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.mediaId").isString())
                 .andExpect(jsonPath("$.title").value("Arrival"))
+                .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/arrival.mkv"))
+                .andExpect(jsonPath("$.mediaFiles[0].label").value("Main Feature"))
+                .andExpect(jsonPath("$.mediaFiles[0].mimeType").value("video/x-matroska"))
+                .andExpect(jsonPath("$.mediaFiles[0].sizeBytes").value(7340032000L))
+                .andExpect(jsonPath("$.mediaFiles[0].durationSeconds").value(6960))
+                .andExpect(jsonPath("$.mediaFiles[0].primaryFile").value(true))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -66,18 +85,48 @@ class MediaIntegrationTest {
         mockMvc.perform(get("/media/{mediaId}", mediaId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
-                .andExpect(jsonPath("$.title").value("Arrival"));
+                .andExpect(jsonPath("$.title").value("Arrival"))
+                .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/arrival.mkv"))
+                .andExpect(jsonPath("$.mediaFiles[0].label").value("Main Feature"))
+                .andExpect(jsonPath("$.mediaFiles[0].primaryFile").value(true));
 
         mockMvc.perform(put("/media/{mediaId}", mediaId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "title": "Arrival (Updated)"
+                                  "title": "Arrival (Updated)",
+                                  "mediaFiles": [
+                                    {
+                                      "location": "/srv/media/arrival-4k.mkv",
+                                      "label": "4K Remux",
+                                      "mimeType": "video/x-matroska",
+                                      "sizeBytes": 18340032000,
+                                      "durationSeconds": 6960,
+                                      "primaryFile": true
+                                    },
+                                    {
+                                      "location": "/srv/media/arrival-commentary.mkv",
+                                      "label": "Commentary Track",
+                                      "mimeType": "audio/flac",
+                                      "sizeBytes": 834003200,
+                                      "durationSeconds": 7020,
+                                      "primaryFile": false
+                                    }
+                                  ]
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
-                .andExpect(jsonPath("$.title").value("Arrival (Updated)"));
+                .andExpect(jsonPath("$.title").value("Arrival (Updated)"))
+                .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/arrival-4k.mkv"))
+                .andExpect(jsonPath("$.mediaFiles[0].label").value("4K Remux"))
+                .andExpect(jsonPath("$.mediaFiles[0].primaryFile").value(true))
+                .andExpect(jsonPath("$.mediaFiles[1].location").value("/srv/media/arrival-commentary.mkv"))
+                .andExpect(jsonPath("$.mediaFiles[1].label").value("Commentary Track"))
+                .andExpect(jsonPath("$.mediaFiles[1].mimeType").value("audio/flac"))
+                .andExpect(jsonPath("$.mediaFiles[1].sizeBytes").value(834003200))
+                .andExpect(jsonPath("$.mediaFiles[1].durationSeconds").value(7020))
+                .andExpect(jsonPath("$.mediaFiles[1].primaryFile").value(false));
 
         mockMvc.perform(delete("/media/{mediaId}", mediaId))
                 .andExpect(status().isNoContent());
@@ -90,9 +139,17 @@ class MediaIntegrationTest {
 
     @Test
     void listMedia_WithPaginationAndFilter_ReturnsPagedDtoResponse() throws Exception {
-        mediaRepository.saveAndFlush(new Media("media-1", "Lord of the Rings"));
-        mediaRepository.saveAndFlush(new Media("media-2", "Ring"));
-        mediaRepository.saveAndFlush(new Media("media-3", "Arrival"));
+        mediaRepository.saveAndFlush(new Media(
+                "media-1",
+                "Lord of the Rings",
+                List.of(new MediaFile("/srv/media/lotr.mkv", "Main Feature", "video/x-matroska", 9340032000L, 10800, true))
+        ));
+        mediaRepository.saveAndFlush(new Media(
+                "media-2",
+                "Ring",
+                List.of(new MediaFile("/srv/media/ring.mkv", "Main Feature", "video/mp4", 4340032000L, 6900, true))
+        ));
+        mediaRepository.saveAndFlush(new Media("media-3", "Arrival", List.of(new MediaFile("/srv/media/arrival.mkv"))));
 
         mockMvc.perform(get("/media")
                         .param("title", "ring")
@@ -105,12 +162,44 @@ class MediaIntegrationTest {
                 .andExpect(jsonPath("$.items.length()").value(2))
                 .andExpect(jsonPath("$.items[0].mediaId").value("media-1"))
                 .andExpect(jsonPath("$.items[0].title").value("Lord of the Rings"))
+                .andExpect(jsonPath("$.items[0].mediaFiles[0].location").value("/srv/media/lotr.mkv"))
+                .andExpect(jsonPath("$.items[0].mediaFiles[0].label").value("Main Feature"))
+                .andExpect(jsonPath("$.items[0].mediaFiles[0].primaryFile").value(true))
                 .andExpect(jsonPath("$.items[1].mediaId").value("media-2"))
                 .andExpect(jsonPath("$.items[1].title").value("Ring"))
+                .andExpect(jsonPath("$.items[1].mediaFiles[0].location").value("/srv/media/ring.mkv"))
+                .andExpect(jsonPath("$.items[1].mediaFiles[0].mimeType").value("video/mp4"))
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(2))
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    void createMedia_WhenMultiplePrimaryFilesRequested_ReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/media")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Arrival",
+                                  "mediaFiles": [
+                                    {
+                                      "location": "/srv/media/arrival-main.mkv",
+                                      "primaryFile": true
+                                    },
+                                    {
+                                      "location": "/srv/media/arrival-backup.mkv",
+                                      "primaryFile": true
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.mediaFiles")
+                        .value("mediaFiles can contain at most one primaryFile=true entry"));
     }
 
     @Test

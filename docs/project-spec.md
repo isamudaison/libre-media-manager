@@ -313,12 +313,12 @@ This document defines the product-level why and what.
 Lower-level specifications should refine it:
 
 - [media-domain-spec.md](/home/isamudaison/Code/libre-media-manager/docs/media-domain-spec.md): concrete domain model, fields, enums, migration shape, and API evolution
+- [taxonomy-spec.md](/home/isamudaison/Code/libre-media-manager/docs/taxonomy-spec.md): categories, tags, ratings, and classification design
 
 Future lower-level specs may cover:
 
 - media file modeling
 - artwork and image modeling
-- ratings and taxonomy design
 - hierarchy design for series, seasons, episodes, albums, and tracks
 - playback resource and streaming descriptor design
 
@@ -327,8 +327,8 @@ Future lower-level specs may cover:
 To turn this into implementation work, the next specification layers should be:
 
 1. media domain model
-2. media file and playback resource model
-3. taxonomy model for categories, tags, and ratings
+2. taxonomy model for categories, tags, and ratings
+3. media file and playback resource model
 4. hierarchy model for composite media
 
 ## Recommendation

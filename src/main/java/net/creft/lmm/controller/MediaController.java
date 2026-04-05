@@ -9,11 +9,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import net.creft.lmm.dto.CreateMediaRequest;
+import net.creft.lmm.dto.MediaFileRequest;
 import net.creft.lmm.dto.UpdateMediaRequest;
 import net.creft.lmm.exception.ApiErrorResponse;
 import net.creft.lmm.exception.InvalidRequestParameterException;
 import net.creft.lmm.response.MediaPageResponse;
 import net.creft.lmm.response.MediaResponse;
+import net.creft.lmm.service.MediaFileDraft;
 import net.creft.lmm.service.MediaService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,11 +24,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Set;
 
 @RestController
 @Tag(name = "Media", description = "Operations for managing media records")
 public class MediaController {
+    private static final String MULTIPLE_PRIMARY_FILES_MESSAGE =
+            "mediaFiles can contain at most one primaryFile=true entry";
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
     private static final String DEFAULT_SORT_FIELD = "title";
@@ -98,11 +103,13 @@ public class MediaController {
             )
     })
     public ResponseEntity<MediaResponse> createMedia(@Valid @RequestBody CreateMediaRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(MediaResponse.from(mediaService.createMedia(request.getTitle())));
+        return ResponseEntity.status(HttpStatus.CREATED).body(MediaResponse.from(
+                mediaService.createMedia(request.getTitle(), extractMediaFiles(request.getMediaFiles()))
+        ));
     }
 
     @PutMapping("/media/{mediaId}")
-    @Operation(summary = "Update media", description = "Updates the title of an existing media item.")
+    @Operation(summary = "Update media", description = "Updates an existing media item and replaces its associated mediaFiles list.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Media updated"),
             @ApiResponse(
@@ -123,7 +130,9 @@ public class MediaController {
     })
     public ResponseEntity<MediaResponse> updateMedia(@PathVariable String mediaId,
                                                      @Valid @RequestBody UpdateMediaRequest updateRequest) {
-        return ResponseEntity.ok(MediaResponse.from(mediaService.updateMedia(mediaId, updateRequest.getTitle())));
+        return ResponseEntity.ok(MediaResponse.from(
+                mediaService.updateMedia(mediaId, updateRequest.getTitle(), extractMediaFiles(updateRequest.getMediaFiles()))
+        ));
     }
 
     @DeleteMapping("/media/{mediaId}")
@@ -158,5 +167,31 @@ public class MediaController {
                 .orElseThrow(() -> new InvalidRequestParameterException("direction", "direction must be 'asc' or 'desc'"));
 
         return PageRequest.of(page, size, Sort.by(sortDirection, normalizedSort));
+    }
+
+    private List<MediaFileDraft> extractMediaFiles(List<MediaFileRequest> mediaFiles) {
+        if (mediaFiles == null) {
+            return List.of();
+        }
+        validatePrimaryFileSelection(mediaFiles);
+        return mediaFiles.stream()
+                .map(mediaFile -> new MediaFileDraft(
+                        mediaFile.getLocation(),
+                        mediaFile.getLabel(),
+                        mediaFile.getMimeType(),
+                        mediaFile.getSizeBytes(),
+                        mediaFile.getDurationSeconds(),
+                        mediaFile.isPrimaryFile()
+                ))
+                .toList();
+    }
+
+    private void validatePrimaryFileSelection(List<MediaFileRequest> mediaFiles) {
+        long primaryFiles = mediaFiles.stream()
+                .filter(MediaFileRequest::isPrimaryFile)
+                .count();
+        if (primaryFiles > 1) {
+            throw new InvalidRequestParameterException("mediaFiles", MULTIPLE_PRIMARY_FILES_MESSAGE);
+        }
     }
 }
