@@ -15,6 +15,7 @@ public record MediaDraft(
         LocalDate releaseDate,
         Integer runtimeMinutes,
         String language,
+        String parentId,
         List<MediaFileDraft> mediaFiles
 ) {
     public MediaDraft {

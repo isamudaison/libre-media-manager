@@ -1,20 +1,10 @@
 package net.creft.lmm.model;
 
+import jakarta.persistence.Embeddable;
 import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 
-@Entity
+@Embeddable
 public class MediaFile {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
     @Column(nullable = false, length = 2048)
     private String location;
@@ -33,10 +23,6 @@ public class MediaFile {
 
     @Column(nullable = false)
     private boolean primaryFile;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "media_id", nullable = false)
-    private Media media;
 
     public MediaFile() {
     }
@@ -59,14 +45,6 @@ public class MediaFile {
         this.sizeBytes = sizeBytes;
         this.durationSeconds = durationSeconds;
         this.primaryFile = primaryFile;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getLocation() {
@@ -115,13 +93,5 @@ public class MediaFile {
 
     public void setPrimaryFile(boolean primaryFile) {
         this.primaryFile = primaryFile;
-    }
-
-    public Media getMedia() {
-        return media;
-    }
-
-    public void setMedia(Media media) {
-        this.media = media;
     }
 }

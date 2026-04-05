@@ -19,6 +19,10 @@ public class CreateMediaRequest {
     @Size(max = 255, message = "title must be at most 255 characters")
     private String title;
 
+    @Schema(description = "Optional parent media identifier for lightweight collection grouping", example = "c1c32f42-8919-4d6c-a0d8-9b4d42d2adbe")
+    @Size(max = 36, message = "parentId must be at most 36 characters")
+    private String parentId;
+
     @Schema(description = "Original or source-language title", example = "Story of Your Life")
     @Size(max = 255, message = "originalTitle must be at most 255 characters")
     private String originalTitle;
@@ -58,7 +62,7 @@ public class CreateMediaRequest {
     }
 
     public CreateMediaRequest(String title, MediaType mediaType, List<MediaFileRequest> mediaFiles) {
-        this(title, null, mediaType, null, null, null, null, null, mediaFiles);
+        this(title, null, null, mediaType, null, null, null, null, null, mediaFiles);
     }
 
     public CreateMediaRequest(
@@ -72,7 +76,23 @@ public class CreateMediaRequest {
             String language,
             List<MediaFileRequest> mediaFiles
     ) {
+        this(title, null, originalTitle, mediaType, status, summary, releaseDate, runtimeMinutes, language, mediaFiles);
+    }
+
+    public CreateMediaRequest(
+            String title,
+            String parentId,
+            String originalTitle,
+            MediaType mediaType,
+            MediaStatus status,
+            String summary,
+            LocalDate releaseDate,
+            Integer runtimeMinutes,
+            String language,
+            List<MediaFileRequest> mediaFiles
+    ) {
         this.title = title;
+        this.parentId = parentId;
         this.originalTitle = originalTitle;
         this.mediaType = mediaType;
         this.status = status;
@@ -89,6 +109,14 @@ public class CreateMediaRequest {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
     }
 
     public String getOriginalTitle() {

@@ -50,7 +50,7 @@ class MediaServiceImplTest {
                 .thenReturn(page);
 
         Page<Media> result = mediaService.listMedia(
-                new MediaSearchCriteria(null, null, null, null, null, null),
+                new MediaSearchCriteria(null, null, null, null, null, null, null),
                 pageable
         );
 
@@ -66,7 +66,7 @@ class MediaServiceImplTest {
                 .thenReturn(page);
 
         Page<Media> result = mediaService.listMedia(
-                new MediaSearchCriteria("   ", null, null, "   ", null, null),
+                new MediaSearchCriteria("   ", "   ", null, null, "   ", null, null),
                 pageable
         );
 
@@ -84,6 +84,7 @@ class MediaServiceImplTest {
         Page<Media> result = mediaService.listMedia(
                 new MediaSearchCriteria(
                         " Filtered ",
+                        " collection-1 ",
                         MediaType.MOVIE,
                         MediaStatus.ACTIVE,
                         " en ",
@@ -119,6 +120,7 @@ class MediaServiceImplTest {
     void createMedia_PersistsGeneratedMediaIdTrimmedMetadataAndDefaults() {
         ArgumentCaptor<Media> captor = ArgumentCaptor.forClass(Media.class);
         when(mediaRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mediaRepository.findByMediaId("collection-1")).thenReturn(new Media("collection-1", "Collection"));
 
         Media result = mediaService.createMedia(new MediaDraft(
                 "  New Title  ",
@@ -129,6 +131,7 @@ class MediaServiceImplTest {
                 RELEASE_DATE,
                 116,
                 " en ",
+                "  collection-1  ",
                 List.of(new MediaFileDraft(
                         "/srv/media/new-title.mkv",
                         "  Main Feature  ",
@@ -148,6 +151,7 @@ class MediaServiceImplTest {
         assertEquals(RELEASE_DATE, result.getReleaseDate());
         assertEquals(116, result.getRuntimeMinutes());
         assertEquals("en", result.getLanguage());
+        assertEquals("collection-1", result.getParentId());
         assertNotNull(result.getMediaId());
         assertEquals(1, result.getMediaFiles().size());
         assertEquals("/srv/media/new-title.mkv", result.getMediaFiles().get(0).getLocation());
@@ -165,6 +169,7 @@ class MediaServiceImplTest {
         existing.setMediaType(MediaType.MOVIE);
         existing.setStatus(MediaStatus.ACTIVE);
         when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
+        when(mediaRepository.findByMediaId("collection-2")).thenReturn(new Media("collection-2", "Collection"));
         when(mediaRepository.save(existing)).thenReturn(existing);
 
         Media updated = mediaService.updateMedia("media-1", new MediaDraft(
@@ -176,6 +181,7 @@ class MediaServiceImplTest {
                 LocalDate.parse("2020-01-01"),
                 120,
                 " en-US ",
+                "  collection-2  ",
                 List.of(new MediaFileDraft(
                         "/srv/media/updated.mkv",
                         " 4K Remux ",
@@ -186,6 +192,7 @@ class MediaServiceImplTest {
                 ))
         ));
 
+        assertEquals("media-1", updated.getMediaId());
         assertEquals("Updated", updated.getTitle());
         assertEquals("Updated Original", updated.getOriginalTitle());
         assertEquals(MediaType.SERIES, updated.getMediaType());
@@ -194,6 +201,7 @@ class MediaServiceImplTest {
         assertEquals(LocalDate.parse("2020-01-01"), updated.getReleaseDate());
         assertEquals(120, updated.getRuntimeMinutes());
         assertEquals("en-US", updated.getLanguage());
+        assertEquals("collection-2", updated.getParentId());
         assertEquals(1, updated.getMediaFiles().size());
         assertEquals("/srv/media/updated.mkv", updated.getMediaFiles().get(0).getLocation());
         assertEquals("4K Remux", updated.getMediaFiles().get(0).getLabel());
@@ -201,6 +209,49 @@ class MediaServiceImplTest {
         assertEquals(9340032000L, updated.getMediaFiles().get(0).getSizeBytes());
         assertEquals(6990, updated.getMediaFiles().get(0).getDurationSeconds());
         assertEquals(true, updated.getMediaFiles().get(0).isPrimaryFile());
+        verify(mediaRepository).save(existing);
+    }
+
+    @Test
+    void updateMedia_NormalizesOptionalStringsToNull() {
+        Media existing = new Media("media-1", "Old", List.of(new MediaFile("/srv/media/old.mkv")));
+        existing.setMediaType(MediaType.MOVIE);
+        existing.setStatus(MediaStatus.ARCHIVED);
+        when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
+        when(mediaRepository.save(existing)).thenReturn(existing);
+
+        Media updated = mediaService.updateMedia("media-1", new MediaDraft(
+                "  Updated  ",
+                "   ",
+                MediaType.MOVIE,
+                null,
+                "   ",
+                RELEASE_DATE,
+                null,
+                "   ",
+                "   ",
+                List.of(new MediaFileDraft(
+                        "/srv/media/updated.mkv",
+                        "   ",
+                        "   ",
+                        null,
+                        null,
+                        false
+                ))
+        ));
+
+        assertEquals("media-1", updated.getMediaId());
+        assertEquals("Updated", updated.getTitle());
+        assertNull(updated.getOriginalTitle());
+        assertEquals(MediaType.MOVIE, updated.getMediaType());
+        assertEquals(MediaStatus.ACTIVE, updated.getStatus());
+        assertNull(updated.getSummary());
+        assertNull(updated.getRuntimeMinutes());
+        assertNull(updated.getLanguage());
+        assertNull(updated.getParentId());
+        assertEquals("/srv/media/updated.mkv", updated.getMediaFiles().get(0).getLocation());
+        assertNull(updated.getMediaFiles().get(0).getLabel());
+        assertNull(updated.getMediaFiles().get(0).getMimeType());
         verify(mediaRepository).save(existing);
     }
 
@@ -245,6 +296,7 @@ class MediaServiceImplTest {
                 RELEASE_DATE,
                 116,
                 "   ",
+                "   ",
                 List.of(new MediaFileDraft(
                         "/srv/media/new-title.mkv",
                         "   ",
@@ -258,8 +310,88 @@ class MediaServiceImplTest {
         assertNull(result.getOriginalTitle());
         assertNull(result.getSummary());
         assertNull(result.getLanguage());
+        assertNull(result.getParentId());
         assertNull(result.getMediaFiles().get(0).getLabel());
         assertNull(result.getMediaFiles().get(0).getMimeType());
+    }
+
+    @Test
+    void createMedia_WhenParentIdDoesNotExist_ThrowsValidationError() {
+        when(mediaRepository.findByMediaId("missing-parent")).thenReturn(null);
+
+        InvalidRequestParameterException exception = assertThrows(
+                InvalidRequestParameterException.class,
+                () -> mediaService.createMedia(new MediaDraft(
+                        "New Title",
+                        null,
+                        MediaType.MOVIE,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "missing-parent",
+                        List.of()
+                ))
+        );
+
+        assertEquals("parentId must reference an existing mediaId", exception.getMessage());
+        verify(mediaRepository, never()).save(org.mockito.ArgumentMatchers.any(Media.class));
+    }
+
+    @Test
+    void updateMedia_WhenParentIdReferencesSelf_ThrowsValidationError() {
+        Media existing = new Media("media-1", "Old");
+        existing.setMediaType(MediaType.MOVIE);
+        when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
+
+        InvalidRequestParameterException exception = assertThrows(
+                InvalidRequestParameterException.class,
+                () -> mediaService.updateMedia("media-1", new MediaDraft(
+                        "Updated",
+                        null,
+                        MediaType.MOVIE,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "media-1",
+                        List.of()
+                ))
+        );
+
+        assertEquals("parentId cannot reference the same media item", exception.getMessage());
+        verify(mediaRepository, never()).save(org.mockito.ArgumentMatchers.any(Media.class));
+    }
+
+    @Test
+    void updateMedia_WhenParentIdCreatesCycle_ThrowsValidationError() {
+        Media existing = new Media("media-1", "Old");
+        existing.setMediaType(MediaType.MOVIE);
+        Media parent = new Media("collection-1", "Collection");
+        parent.setParentId("media-1");
+        when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
+        when(mediaRepository.findByMediaId("collection-1")).thenReturn(parent);
+
+        InvalidRequestParameterException exception = assertThrows(
+                InvalidRequestParameterException.class,
+                () -> mediaService.updateMedia("media-1", new MediaDraft(
+                        "Updated",
+                        null,
+                        MediaType.MOVIE,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "collection-1",
+                        List.of()
+                ))
+        );
+
+        assertEquals("parentId cannot create a cycle", exception.getMessage());
+        verify(mediaRepository, never()).save(org.mockito.ArgumentMatchers.any(Media.class));
     }
 
     @Test
@@ -270,6 +402,7 @@ class MediaServiceImplTest {
                         "New Title",
                         null,
                         MediaType.MOVIE,
+                        null,
                         null,
                         null,
                         null,
@@ -298,6 +431,7 @@ class MediaServiceImplTest {
                         null,
                         null,
                         null,
+                        null,
                         List.of()
                 ))
         );
@@ -318,6 +452,7 @@ class MediaServiceImplTest {
                         null,
                         null,
                         null,
+                        null,
                         List.of()
                 ))
         );
@@ -326,6 +461,6 @@ class MediaServiceImplTest {
     }
 
     private MediaDraft minimalDraft(String title) {
-        return new MediaDraft(title, null, MediaType.MOVIE, null, null, null, null, null, List.of());
+        return new MediaDraft(title, null, MediaType.MOVIE, null, null, null, null, null, null, List.of());
     }
 }

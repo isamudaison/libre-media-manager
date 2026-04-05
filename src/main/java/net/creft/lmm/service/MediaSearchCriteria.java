@@ -7,6 +7,7 @@ import java.time.LocalDate;
 
 public record MediaSearchCriteria(
         String title,
+        String parentId,
         MediaType mediaType,
         MediaStatus status,
         String language,

@@ -1,5 +1,8 @@
 package net.creft.lmm.exception;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,6 +34,22 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleMalformedJson(HttpMessageNotReadableException exception) {
+        InvalidFormatException invalidFormatException = findCause(exception, InvalidFormatException.class);
+        if (invalidFormatException != null) {
+            String field = toFieldPath(invalidFormatException.getPath());
+            if (field != null) {
+                return buildValidationResponse(Map.of(field, field + " must be a valid value"));
+            }
+        }
+
+        MismatchedInputException mismatchedInputException = findCause(exception, MismatchedInputException.class);
+        if (mismatchedInputException != null) {
+            String field = toFieldPath(mismatchedInputException.getPath());
+            if (field != null) {
+                return buildValidationResponse(Map.of(field, field + " must be a valid value"));
+            }
+        }
+
         return buildResponse(HttpStatus.BAD_REQUEST, "Malformed JSON request body", "Malformed JSON request body", Map.of());
     }
 
@@ -77,5 +96,36 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ApiErrorResponse> buildValidationResponse(Map<String, String> fieldErrors) {
         return buildResponse(HttpStatus.BAD_REQUEST, "Validation failed", "Validation failed", fieldErrors);
+    }
+
+    private <T extends Throwable> T findCause(Throwable throwable, Class<T> causeType) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (causeType.isInstance(current)) {
+                return causeType.cast(current);
+            }
+            current = current.getCause();
+        }
+        return null;
+    }
+
+    private String toFieldPath(java.util.List<JsonMappingException.Reference> path) {
+        if (path == null || path.isEmpty()) {
+            return null;
+        }
+
+        StringBuilder fieldPath = new StringBuilder();
+        for (JsonMappingException.Reference reference : path) {
+            if (reference.getFieldName() != null) {
+                if (!fieldPath.isEmpty()) {
+                    fieldPath.append('.');
+                }
+                fieldPath.append(reference.getFieldName());
+            } else if (reference.getIndex() >= 0) {
+                fieldPath.append('[').append(reference.getIndex()).append(']');
+            }
+        }
+
+        return fieldPath.isEmpty() ? null : fieldPath.toString();
     }
 }

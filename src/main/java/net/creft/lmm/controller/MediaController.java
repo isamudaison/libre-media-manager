@@ -43,7 +43,7 @@ public class MediaController {
     private static final String DEFAULT_SORT_FIELD = "title";
     private static final String DEFAULT_SORT_DIRECTION = "asc";
     private static final Set<String> ALLOWED_SORT_FIELDS =
-            Set.of("mediaId", "title", "mediaType", "status", "releaseDate", "createdAt", "updatedAt");
+            Set.of("mediaId", "parentId", "title", "mediaType", "status", "releaseDate", "createdAt", "updatedAt");
 
     private final MediaService mediaService;
 
@@ -54,7 +54,7 @@ public class MediaController {
     @GetMapping("/media")
     @Operation(
             summary = "List media",
-            description = "Returns paginated media results with optional filtering by title, mediaType, status, language, and release-date bounds."
+            description = "Returns paginated media results with optional filtering by title, parentId, mediaType, status, language, and release-date bounds."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Media page returned"),
@@ -67,6 +67,8 @@ public class MediaController {
     public ResponseEntity<MediaPageResponse> listMedia(
             @Parameter(description = "Optional case-insensitive title filter", example = "arrival")
             @RequestParam(required = false) String title,
+            @Parameter(description = "Optional parent media identifier filter", example = "c1c32f42-8919-4d6c-a0d8-9b4d42d2adbe")
+            @RequestParam(required = false) String parentId,
             @Parameter(description = "Optional media type filter", example = "MOVIE")
             @RequestParam(required = false) MediaType mediaType,
             @Parameter(description = "Optional lifecycle status filter", example = "ACTIVE")
@@ -81,7 +83,7 @@ public class MediaController {
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size between 1 and 100", example = "20")
             @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field. Allowed values: mediaId, title, mediaType, status, releaseDate, createdAt, updatedAt", example = "title")
+            @Parameter(description = "Sort field. Allowed values: mediaId, parentId, title, mediaType, status, releaseDate, createdAt, updatedAt", example = "title")
             @RequestParam(defaultValue = DEFAULT_SORT_FIELD) String sort,
             @Parameter(description = "Sort direction. Allowed values: asc, desc", example = "asc")
             @RequestParam(defaultValue = DEFAULT_SORT_DIRECTION) String direction
@@ -89,7 +91,7 @@ public class MediaController {
         Pageable pageable = buildPageRequest(page, size, sort, direction);
         validateReleaseDateRange(releasedAfter, releasedBefore);
         return ResponseEntity.ok(MediaPageResponse.from(mediaService.listMedia(
-                new MediaSearchCriteria(title, mediaType, status, language, releasedBefore, releasedAfter),
+                new MediaSearchCriteria(title, parentId, mediaType, status, language, releasedBefore, releasedAfter),
                 pageable
         )));
     }
@@ -180,7 +182,7 @@ public class MediaController {
         if (!ALLOWED_SORT_FIELDS.contains(normalizedSort)) {
             throw new InvalidRequestParameterException(
                     "sort",
-                    "sort must be one of [mediaId, title, mediaType, status, releaseDate, createdAt, updatedAt]"
+                    "sort must be one of [mediaId, parentId, title, mediaType, status, releaseDate, createdAt, updatedAt]"
             );
         }
 
@@ -235,6 +237,7 @@ public class MediaController {
                 request.getReleaseDate(),
                 request.getRuntimeMinutes(),
                 request.getLanguage(),
+                request.getParentId(),
                 extractMediaFiles(request.getMediaFiles())
         );
     }
@@ -249,6 +252,7 @@ public class MediaController {
                 request.getReleaseDate(),
                 request.getRuntimeMinutes(),
                 request.getLanguage(),
+                request.getParentId(),
                 extractMediaFiles(request.getMediaFiles())
         );
     }

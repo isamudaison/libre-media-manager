@@ -69,9 +69,11 @@ public class MediaControllerTest {
                 buildMedia("media-2", "Second Title", MediaType.BOOK, MediaStatus.ARCHIVED, "fr",
                         List.of(new MediaFile("/srv/media/second.mkv")))
         );
+        mediaItems.get(0).setParentId("collection-1");
         Mockito.when(mediaService.listMedia(
                         Mockito.eq(new MediaSearchCriteria(
                                 "Title",
+                                "collection-1",
                                 MediaType.MOVIE,
                                 MediaStatus.ACTIVE,
                                 "en",
@@ -82,8 +84,9 @@ public class MediaControllerTest {
                 ))
                 .thenReturn(new PageImpl<>(mediaItems, pageRequest, 5));
 
-        mockMvc.perform(get("/media")
+                mockMvc.perform(get("/media")
                         .param("title", "Title")
+                        .param("parentId", "collection-1")
                         .param("mediaType", "MOVIE")
                         .param("status", "ACTIVE")
                         .param("language", "en")
@@ -96,6 +99,7 @@ public class MediaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.items[0].mediaId").value("media-1"))
+                .andExpect(jsonPath("$.items[0].parentId").value("collection-1"))
                 .andExpect(jsonPath("$.items[0].title").value("First Title"))
                 .andExpect(jsonPath("$.items[0].mediaType").value("MOVIE"))
                 .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
@@ -117,6 +121,7 @@ public class MediaControllerTest {
         Mockito.verify(mediaService).listMedia(
                 Mockito.eq(new MediaSearchCriteria(
                         "Title",
+                        "collection-1",
                         MediaType.MOVIE,
                         MediaStatus.ACTIVE,
                         "en",
@@ -154,7 +159,7 @@ public class MediaControllerTest {
                 .andExpect(jsonPath("$.error").value("Validation failed"))
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.fieldErrors.sort")
-                        .value("sort must be one of [mediaId, title, mediaType, status, releaseDate, createdAt, updatedAt]"));
+                        .value("sort must be one of [mediaId, parentId, title, mediaType, status, releaseDate, createdAt, updatedAt]"));
 
         Mockito.verifyNoInteractions(mediaService);
     }
@@ -205,11 +210,13 @@ public class MediaControllerTest {
         String mediaId = "12345";
         Media media = buildMedia(mediaId, "Test", MediaType.MOVIE, MediaStatus.ACTIVE, "en",
                 List.of(new MediaFile("/srv/media/test.mkv")));
+        media.setParentId("collection-1");
         Mockito.when(mediaService.getMedia(mediaId)).thenReturn(media);
 
         mockMvc.perform(get("/media/{mediaId}", mediaId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
+                .andExpect(jsonPath("$.parentId").value("collection-1"))
                 .andExpect(jsonPath("$.title").value("Test"))
                 .andExpect(jsonPath("$.originalTitle").value("Original Test"))
                 .andExpect(jsonPath("$.mediaType").value("MOVIE"))
@@ -255,6 +262,7 @@ public class MediaControllerTest {
     public void testCreateMedia() throws Exception {
         CreateMediaRequest request = new CreateMediaRequest(
                 "New Title",
+                "collection-1",
                 "Story of Your Life",
                 MediaType.MOVIE,
                 null,
@@ -280,6 +288,7 @@ public class MediaControllerTest {
                 RELEASE_DATE,
                 116,
                 "en",
+                "collection-1",
                 List.of(new MediaFileDraft(
                         "/srv/media/new-title.mkv",
                         "Main Feature",
@@ -308,6 +317,7 @@ public class MediaControllerTest {
                         true
                 ))
         );
+        savedMedia.setParentId("collection-1");
         Mockito.when(mediaService.createMedia(expectedDraft)).thenReturn(savedMedia);
 
         mockMvc.perform(post("/media")
@@ -315,6 +325,7 @@ public class MediaControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.mediaId").value("generated-id"))
+                .andExpect(jsonPath("$.parentId").value("collection-1"))
                 .andExpect(jsonPath("$.title").value("New Title"))
                 .andExpect(jsonPath("$.originalTitle").value("Story of Your Life"))
                 .andExpect(jsonPath("$.mediaType").value("MOVIE"))
@@ -404,6 +415,65 @@ public class MediaControllerTest {
     }
 
     @Test
+    public void testCreateMedia_WhenMediaTypeEnumInvalid_ReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/media")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Arrival",
+                                  "mediaType": "NOT_A_TYPE"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.mediaType").value("mediaType must be a valid value"));
+
+        Mockito.verifyNoInteractions(mediaService);
+    }
+
+    @Test
+    public void testCreateMedia_WhenReleaseDateInvalid_ReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/media")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Arrival",
+                                  "mediaType": "MOVIE",
+                                  "releaseDate": "11-11-2016"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.releaseDate").value("releaseDate must be a valid value"));
+
+        Mockito.verifyNoInteractions(mediaService);
+    }
+
+    @Test
+    public void testCreateMedia_WhenRuntimeMinutesTypeInvalid_ReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/media")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Arrival",
+                                  "mediaType": "MOVIE",
+                                  "runtimeMinutes": "long"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.runtimeMinutes").value("runtimeMinutes must be a valid value"));
+
+        Mockito.verifyNoInteractions(mediaService);
+    }
+
+    @Test
     public void testCreateMedia_WhenMalformedJson_ReturnsBadRequest() throws Exception {
         mockMvc.perform(post("/media")
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
@@ -430,6 +500,7 @@ public class MediaControllerTest {
                         null,
                         null,
                         null,
+                        null,
                         List.of()
                 )))
                 .thenThrow(new DataIntegrityViolationException("duplicate media"));
@@ -450,6 +521,7 @@ public class MediaControllerTest {
         String mediaId = "12345";
         UpdateMediaRequest updateRequest = new UpdateMediaRequest(
                 "Updated Title",
+                "collection-2",
                 "Updated Original",
                 MediaType.MOVIE,
                 MediaStatus.ARCHIVED,
@@ -475,6 +547,7 @@ public class MediaControllerTest {
                 LocalDate.parse("2017-01-01"),
                 117,
                 "en-US",
+                "collection-2",
                 List.of(new MediaFileDraft(
                         "/srv/media/updated-title.mkv",
                         "Director Commentary",
@@ -503,6 +576,7 @@ public class MediaControllerTest {
                         false
                 ))
         );
+        updatedMedia.setParentId("collection-2");
         Mockito.when(mediaService.updateMedia(mediaId, expectedDraft)).thenReturn(updatedMedia);
 
         mockMvc.perform(put("/media/{mediaId}", mediaId)
@@ -510,6 +584,7 @@ public class MediaControllerTest {
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
+                .andExpect(jsonPath("$.parentId").value("collection-2"))
                 .andExpect(jsonPath("$.title").value("Updated Title"))
                 .andExpect(jsonPath("$.originalTitle").value("Updated Original"))
                 .andExpect(jsonPath("$.mediaType").value("MOVIE"))
@@ -558,12 +633,32 @@ public class MediaControllerTest {
     }
 
     @Test
+    public void testUpdateMedia_WhenStatusEnumInvalid_ReturnsValidationError() throws Exception {
+        mockMvc.perform(put("/media/{mediaId}", "12345")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Updated Title",
+                                  "mediaType": "MOVIE",
+                                  "status": "NOT_A_STATUS"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.status").value("status must be a valid value"));
+
+        Mockito.verifyNoInteractions(mediaService);
+    }
+
+    @Test
     public void testUpdateMedia_WhenMediaNotFound() throws Exception {
         String mediaId = "nonexistent-id";
         UpdateMediaRequest updateRequest = new UpdateMediaRequest("Updated Title", MediaType.MOVIE);
         Mockito.when(mediaService.updateMedia(
                         mediaId,
-                        new MediaDraft("Updated Title", null, MediaType.MOVIE, null, null, null, null, null, List.of())
+                        new MediaDraft("Updated Title", null, MediaType.MOVIE, null, null, null, null, null, null, List.of())
                 ))
                 .thenThrow(new MediaNotFoundException(mediaId));
 

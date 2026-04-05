@@ -14,6 +14,9 @@ public class MediaResponse {
     @Schema(description = "Public media identifier", example = "c1c32f42-8919-4d6c-a0d8-9b4d42d2adbe")
     private final String mediaId;
 
+    @Schema(description = "Optional parent media identifier for lightweight collection grouping", example = "b8a79f6d-9317-4d16-8c77-49b1a6f7ec28")
+    private final String parentId;
+
     @Schema(description = "Human-readable media title", example = "Arrival")
     private final String title;
 
@@ -49,6 +52,7 @@ public class MediaResponse {
 
     public MediaResponse(
             String mediaId,
+            String parentId,
             String title,
             String originalTitle,
             MediaType mediaType,
@@ -62,6 +66,7 @@ public class MediaResponse {
             List<MediaFileResponse> mediaFiles
     ) {
         this.mediaId = mediaId;
+        this.parentId = parentId;
         this.title = title;
         this.originalTitle = originalTitle;
         this.mediaType = mediaType;
@@ -81,6 +86,7 @@ public class MediaResponse {
                 .toList();
         return new MediaResponse(
                 media.getMediaId(),
+                media.getParentId(),
                 media.getTitle(),
                 media.getOriginalTitle(),
                 media.getMediaType(),
@@ -97,6 +103,10 @@ public class MediaResponse {
 
     public String getMediaId() {
         return mediaId;
+    }
+
+    public String getParentId() {
+        return parentId;
     }
 
     public String getTitle() {

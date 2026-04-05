@@ -89,7 +89,10 @@ class MediaRepositoryTest {
 
     @Test
     void saveMediaWithRichMetadata_PersistsScalarFieldsAndTimestamps() {
+        mediaRepository.saveAndFlush(new Media("collection-1", "Collection"));
+
         Media media = new Media("media-4", "Arrival");
+        media.setParentId("collection-1");
         media.setOriginalTitle("Story of Your Life");
         media.setMediaType(MediaType.MOVIE);
         media.setStatus(MediaStatus.ARCHIVED);
@@ -100,6 +103,7 @@ class MediaRepositoryTest {
 
         Media saved = mediaRepository.saveAndFlush(media);
 
+        assertEquals("collection-1", saved.getParentId());
         assertEquals("Story of Your Life", saved.getOriginalTitle());
         assertEquals(MediaType.MOVIE, saved.getMediaType());
         assertEquals(MediaStatus.ARCHIVED, saved.getStatus());

@@ -15,7 +15,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -23,6 +25,9 @@ public class MediaServiceImpl implements MediaService {
     private static final Logger logger = LoggerFactory.getLogger(MediaServiceImpl.class);
     private static final String MULTIPLE_PRIMARY_FILES_MESSAGE =
             "mediaFiles can contain at most one primaryFile=true entry";
+    private static final String INVALID_PARENT_ID_MESSAGE = "parentId must reference an existing mediaId";
+    private static final String SELF_PARENT_ID_MESSAGE = "parentId cannot reference the same media item";
+    private static final String CYCLIC_PARENT_ID_MESSAGE = "parentId cannot create a cycle";
 
     private final MediaRepository mediaRepository;
 
@@ -37,6 +42,11 @@ public class MediaServiceImpl implements MediaService {
         String normalizedTitle = normalizeNullableString(criteria.title());
         if (normalizedTitle != null) {
             specification = specification.and(titleContains(normalizedTitle));
+        }
+
+        String normalizedParentId = normalizeNullableString(criteria.parentId());
+        if (normalizedParentId != null) {
+            specification = specification.and(hasParentId(normalizedParentId));
         }
 
         if (criteria.mediaType() != null) {
@@ -102,6 +112,9 @@ public class MediaServiceImpl implements MediaService {
 
     private void applyMediaDraft(Media media, MediaDraft mediaDraft) {
         media.setTitle(normalizeRequiredString("title", mediaDraft.title()));
+        String normalizedParentId = normalizeNullableString(mediaDraft.parentId());
+        validateParentRelationship(media.getMediaId(), normalizedParentId);
+        media.setParentId(normalizedParentId);
         media.setOriginalTitle(normalizeNullableString(mediaDraft.originalTitle()));
         media.setMediaType(requireMediaType(mediaDraft.mediaType()));
         media.setStatus(mediaDraft.status() == null ? MediaStatus.ACTIVE : mediaDraft.status());
@@ -176,9 +189,47 @@ public class MediaServiceImpl implements MediaService {
         }
     }
 
+    private void validateParentRelationship(String mediaId, String parentId) {
+        if (parentId == null) {
+            return;
+        }
+        if (parentId.equals(mediaId)) {
+            throw new InvalidRequestParameterException("parentId", SELF_PARENT_ID_MESSAGE);
+        }
+
+        Media parent = mediaRepository.findByMediaId(parentId);
+        if (parent == null) {
+            throw new InvalidRequestParameterException("parentId", INVALID_PARENT_ID_MESSAGE);
+        }
+
+        validateNoParentCycle(mediaId, parent);
+    }
+
+    private void validateNoParentCycle(String mediaId, Media parent) {
+        Set<String> visitedMediaIds = new HashSet<>();
+        Media current = parent;
+        while (current != null) {
+            String currentMediaId = current.getMediaId();
+            if (!visitedMediaIds.add(currentMediaId) || currentMediaId.equals(mediaId)) {
+                throw new InvalidRequestParameterException("parentId", CYCLIC_PARENT_ID_MESSAGE);
+            }
+
+            String nextParentId = normalizeNullableString(current.getParentId());
+            if (nextParentId == null) {
+                return;
+            }
+
+            current = mediaRepository.findByMediaId(nextParentId);
+        }
+    }
+
     private Specification<Media> titleContains(String title) {
         return (root, query, builder) ->
                 builder.like(builder.lower(root.get("title")), "%" + title.toLowerCase() + "%");
+    }
+
+    private Specification<Media> hasParentId(String parentId) {
+        return (root, query, builder) -> builder.equal(root.get("parentId"), parentId);
     }
 
     private Specification<Media> hasMediaType(MediaType mediaType) {

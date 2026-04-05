@@ -1,23 +1,34 @@
 # Media Domain Model Specification
 
-Status: Draft
-Last updated: 2026-03-30
+Status: Current implementation-aligned draft
+Last updated: 2026-04-05
 
 Parent spec: [project-spec.md](/home/isamudaison/Code/libre-media-manager/docs/project-spec.md)
 Related spec: [taxonomy-spec.md](/home/isamudaison/Code/libre-media-manager/docs/taxonomy-spec.md)
 
 ## Purpose
 
-This document defines the recommended next version of the domain model for Libre Media Manager.
-It is intended to turn the current title-only `Media` record into a real catalog object with clear
-business meaning, validation rules, persistence requirements, and API implications.
+This document defines the current Phase 1 domain model for Libre Media Manager.
+It documents the richer `Media` contract that has now landed in the codebase and the near-term
+constraints that shape how catalog records, playback files, and lightweight parent-child
+relationships work today.
 
-The current implementation stores only:
+The implementation now stores:
 
 - `mediaId`
+- `parentId`
 - `title`
+- `originalTitle`
+- `mediaType`
+- `status`
+- `summary`
+- `releaseDate`
+- `runtimeMinutes`
+- `language`
+- `createdAt`
+- `updatedAt`
 
-The implementation has now started to introduce a `MediaFile` child collection with:
+It also supports an ordered `MediaFile` child collection with:
 
 - `location`
 - `label`
@@ -26,27 +37,26 @@ The implementation has now started to introduce a `MediaFile` child collection w
 - `durationSeconds`
 - `primaryFile`
 
-That gives the API a useful playback-oriented file model, but broader file and playback-resource
-modeling is still not fully specified.
+That gives the API a credible metadata-plus-playback baseline while leaving deeper asset and
+taxonomy modeling for later phases.
 
-That is enough for CRUD scaffolding, but not enough for a credible media-management domain.
+## Current Scope
 
-## Recommended Scope
-
-The recommended v1 scope is:
+The current Phase 1 scope is:
 
 - model a media catalog record, not a file on disk
 - support richer descriptive metadata
 - support lifecycle state
+- support lightweight parent-child grouping through `parentId`
 - support filtering and sorting by key metadata fields
-- keep the domain flat for now
+- keep hierarchy semantics intentionally shallow for now
 
-The recommended v1 does not yet model:
+The current implementation does not yet model:
 
 - full file asset and playback resource modeling beyond attached `MediaFile` records
 - ingest/transcoding workflows
 - credits/cast/crew
-- seasons, episodes, tracks, or child-item hierarchies
+- season-specific metadata, track-specific metadata, or multi-level hierarchy semantics
 - provider sync jobs
 - deduplication/merge workflows
 
@@ -61,7 +71,9 @@ The current `Media` entity should remain the primary aggregate, but its meaning 
 Examples:
 
 - one movie
+- one episode
 - one TV series
+- one collection
 - one book
 - one audiobook
 - one album
@@ -70,7 +82,7 @@ Examples:
 
 This keeps the model simple enough to implement cleanly while giving it real business value.
 
-## Proposed Aggregate
+## Current Aggregate
 
 ### `Media`
 
@@ -85,20 +97,23 @@ Required fields:
 
 Optional fields:
 
+- `parentId`: optional parent `mediaId` for lightweight grouping
 - `originalTitle`: original or localized-source title
 - `summary`: human-readable description
 - `releaseDate`: canonical release date
 - `runtimeMinutes`: duration in minutes for time-based media
 - `language`: primary language code
 
-## Proposed Enums
+## Current Enums
 
 ### `MediaType`
 
-Recommended v1 values:
+Current values:
 
 - `MOVIE`
+- `EPISODE`
 - `SERIES`
+- `COLLECTION`
 - `BOOK`
 - `AUDIOBOOK`
 - `ALBUM`
@@ -109,12 +124,12 @@ Recommended v1 values:
 Rationale:
 
 - this is broad enough for a general media catalog
-- it avoids premature hierarchy modeling like `SEASON`, `EPISODE`, or `TRACK`
+- it supports lightweight collection and episode records without forcing deeper season/track design
 - it can still be extended later without redesigning the whole aggregate
 
 ### `MediaStatus`
 
-Recommended values:
+Current values:
 
 - `DRAFT`
 - `ACTIVE`
@@ -145,6 +160,16 @@ Rationale:
 - min length: `1`
 - max length: `255`
 - normalization: trim surrounding whitespace
+
+### `parentId`
+
+- type: `String`
+- format: UUID
+- required: no
+- mutable: yes
+- validation: when provided, must reference an existing `mediaId`
+- cycle policy: cannot reference the same item or create a parent cycle
+- delete behavior: clears to `null` if the parent item is deleted
 
 ### `originalTitle`
 
@@ -214,14 +239,15 @@ Rationale:
 - mutable: no from API perspective
 - managed by: server
 
-## Recommended Persistence Shape
+## Current Persistence Shape
 
 ### `media` table
 
-Recommended columns:
+Current columns:
 
 - `id bigint primary key`
 - `media_id varchar(36) not null unique`
+- `parent_id varchar(36) null`
 - `title varchar(255) not null`
 - `original_title varchar(255) null`
 - `media_type varchar(32) not null`
@@ -233,21 +259,32 @@ Recommended columns:
 - `created_at timestamp with time zone not null`
 - `updated_at timestamp with time zone not null`
 
-Recommended indexes:
+Current indexes:
 
 - unique index on `media_id`
+- index on `parent_id`
 - index on `media_type`
 - index on `status`
 - index on `release_date`
 - index on `lower(title)` if title search becomes a real workload
 
-Recommended constraints:
+Current constraints:
 
 - `runtime_minutes > 0` when not null
+- `parent_id` references `media(media_id)` with `on delete set null`
 - `media_type` restricted to enum values at application layer
 - `status` restricted to enum values at application layer
 
-## API Contract Changes
+### `media_file` collection table
+
+Current shape:
+
+- owned by `Media`
+- stored in request order using `file_order`
+- no Java back-reference from `MediaFile` to `Media`
+- at most one entry may set `primaryFile = true`
+
+## Current API Contract
 
 ## Create Request
 
@@ -255,22 +292,25 @@ Current request:
 
 ```json
 {
-  "title": "Arrival"
-}
-```
-
-Recommended request:
-
-```json
-{
   "title": "Arrival",
+  "parentId": "91b70c8f-4d1b-4c15-bfb1-66b063d6d363",
   "mediaType": "MOVIE",
   "originalTitle": null,
+  "status": "ACTIVE",
   "summary": "A linguist is recruited to communicate with extraterrestrial visitors.",
   "releaseDate": "2016-11-11",
   "runtimeMinutes": 116,
   "language": "en",
-  "status": "ACTIVE"
+  "mediaFiles": [
+    {
+      "location": "/srv/media/arrival.mkv",
+      "label": "Main Feature",
+      "mimeType": "video/x-matroska",
+      "sizeBytes": 7340032000,
+      "durationSeconds": 6960,
+      "primaryFile": true
+    }
+  ]
 }
 ```
 
@@ -278,12 +318,14 @@ Rules:
 
 - `title` required
 - `mediaType` required
+- `parentId` optional
+- `parentId` must reference an existing `mediaId` when present
 - `status` optional in request, default `ACTIVE`
 - all optional string fields should accept omission or `null`
 
 ## Update Request
 
-Recommended near-term choice:
+Current behavior:
 
 - keep `PUT /media/{mediaId}`
 - treat it as a full update of mutable fields
@@ -295,12 +337,14 @@ Required on update:
 
 Optional on update:
 
+- `parentId`
 - `originalTitle`
 - `summary`
 - `releaseDate`
 - `runtimeMinutes`
 - `language`
 - `status`
+- `mediaFiles`
 
 Future option:
 
@@ -308,11 +352,12 @@ Future option:
 
 ## Response Shape
 
-Recommended item response:
+Current item response:
 
 ```json
 {
   "mediaId": "c1c32f42-8919-4d6c-a0d8-9b4d42d2adbe",
+  "parentId": "91b70c8f-4d1b-4c15-bfb1-66b063d6d363",
   "title": "Arrival",
   "originalTitle": null,
   "mediaType": "MOVIE",
@@ -322,26 +367,35 @@ Recommended item response:
   "runtimeMinutes": 116,
   "language": "en",
   "createdAt": "2026-03-29T23:10:00Z",
-  "updatedAt": "2026-03-29T23:10:00Z"
+  "updatedAt": "2026-03-29T23:10:00Z",
+  "mediaFiles": [
+    {
+      "location": "/srv/media/arrival.mkv",
+      "label": "Main Feature",
+      "mimeType": "video/x-matroska",
+      "sizeBytes": 7340032000,
+      "durationSeconds": 6960,
+      "primaryFile": true
+    }
+  ]
 }
 ```
 
-## List Endpoint Evolution
+## List Endpoint
 
 Current filters:
 
 - `title`
-
-Recommended added filters:
-
+- `parentId`
 - `mediaType`
 - `status`
 - `language`
 - `releasedBefore`
 - `releasedAfter`
 
-Recommended sortable fields:
-
+Current sortable fields:
+- `mediaId`
+- `parentId`
 - `title`
 - `mediaType`
 - `status`
@@ -351,9 +405,10 @@ Recommended sortable fields:
 
 ## Validation Rules
 
-Recommended API validation:
+Current API validation:
 
 - `title`: required, 1..255
+- `parentId`: max 36, must reference an existing `mediaId`, cannot self-reference, cannot create a cycle
 - `originalTitle`: max 255
 - `summary`: max 4000
 - `runtimeMinutes`: positive integer
@@ -361,16 +416,18 @@ Recommended API validation:
 - `mediaType`: required enum
 - `status`: enum when provided
 
-Recommended normalization rules:
+Current normalization rules:
 
 - trim all string inputs
 - convert blank optional strings to `null`
 - never expose internal DB `id`
 - keep `mediaId` immutable after creation
+- keep `createdAt` and `updatedAt` server-managed
+- keep `mediaFiles` request-ordered
 
 ## Migration Strategy
 
-Recommended migration sequence:
+Implemented migration sequence:
 
 1. Add nullable optional columns plus non-null enum/timestamp columns with safe defaults.
 2. Backfill existing rows:
@@ -378,9 +435,10 @@ Recommended migration sequence:
    - `status = 'ACTIVE'`
    - `created_at = current_timestamp`
    - `updated_at = current_timestamp`
-3. Update entity, DTOs, response models, and tests.
-4. Expand list endpoint filtering and sorting.
-5. Only after the new model is stable, consider adding child tables or external references.
+3. Add `parent_id` as a nullable self-reference to `media(media_id)` with `on delete set null`.
+4. Update entity, DTOs, response models, and tests.
+5. Expand list endpoint filtering and sorting.
+6. Only after the new model is stable, consider deeper hierarchy semantics or external references.
 
 Example migration shape:
 
@@ -394,29 +452,16 @@ alter table media add column runtime_minutes integer;
 alter table media add column language varchar(16);
 alter table media add column created_at timestamp not null default current_timestamp;
 alter table media add column updated_at timestamp not null default current_timestamp;
+alter table media add column parent_id varchar(36);
+alter table media add constraint fk_media_parent
+    foreign key (parent_id) references media(media_id) on delete set null;
+create index idx_media_parent_id on media (parent_id);
 create index idx_media_type on media (media_type);
 create index idx_media_status on media (status);
 create index idx_media_release_date on media (release_date);
 ```
 
-## Implementation Phases
-
-### Phase 1: Strong Core Metadata
-
-Implement:
-
-- new scalar fields
-- enums
-- timestamps
-- DTO/response updates
-- migration
-- tests
-
-Do not implement yet:
-
-- tags
-- external references
-- hierarchies
+## Future Expansion Areas
 
 ### Phase 2: Classification and Provider References
 
@@ -430,50 +475,41 @@ Possible tables:
 - `media_tags`
 - `media_external_reference`
 
-### Phase 3: Hierarchies and Assets
+### Phase 3: Deeper Hierarchies and Assets
 
 Add only when product requirements are explicit:
 
-- parent/child media relationships
-- episodes/tracks/seasons
+- seasons/tracks and deeper relationship semantics beyond a single `parentId`
 - file assets
 - storage locations
 - technical metadata
 
-## Recommended First Implementation Slice
+## Current Implementation Summary
 
-If implementation starts immediately, the cleanest first slice is:
+The current implementation now includes:
 
-1. add `mediaType`, `status`, `summary`, `releaseDate`, `runtimeMinutes`, `language`, `createdAt`, `updatedAt`
-2. require `mediaType` on create/update
-3. default `status` to `ACTIVE`
-4. expose the new fields in item and list responses
-5. add `mediaType` and `status` filters to `GET /media`
+1. scalar metadata fields plus `createdAt` and `updatedAt`
+2. required `mediaType` on create and update
+3. default `status = ACTIVE` when omitted
+4. ordered `mediaFiles` with a single-primary-file rule
+5. optional `parentId` with existence, self-reference, and cycle validation
+6. `ON DELETE SET NULL` parent cleanup behavior
+7. list filtering by `title`, `parentId`, `mediaType`, `status`, `language`, `releasedBefore`, and `releasedAfter`
+8. first-class `COLLECTION` and `EPISODE` media types
 
-This gives the project a serious domain model without introducing relationship complexity too early.
+## Known Follow-Up Areas
 
-## Decisions To Confirm Before Coding
+The next questions are now about breadth, not the baseline media contract:
 
-The following choices should be confirmed before implementation:
+1. taxonomy resources such as categories, tags, and ratings
+2. external provider and sync identifiers
+3. deeper hierarchy semantics such as seasons or track ordering
+4. stricter language-tag validation
+5. whether `PATCH` should supplement the current strict `PUT`
 
-1. Supported v1 media types:
-   - Are `MOVIE`, `SERIES`, `BOOK`, `AUDIOBOOK`, `ALBUM`, `PODCAST`, `GAME`, `OTHER` sufficient?
-2. Lifecycle policy:
-   - Do we want `DRAFT`, or should the first version use only `ACTIVE` and `ARCHIVED`?
-3. Update semantics:
-   - Keep strict `PUT`, or introduce `PATCH` now?
-4. Language format:
-   - Do we want loose string validation or strict BCP 47 validation?
-5. Near-term scope:
-   - Are tags and external provider IDs needed in the first domain expansion, or can they wait for phase 2?
+## Summary
 
-## Recommendation
+This document now describes the shipped Phase 1 baseline.
 
-Proceed with the Phase 1 design in this document.
-
-It is the best tradeoff between:
-
-- meaningful domain value
-- implementation cost
-- migration simplicity
-- avoiding premature complexity
+It keeps the model useful without overcommitting to deeper hierarchy semantics, provider sync,
+or taxonomy design before those requirements are fully specified.

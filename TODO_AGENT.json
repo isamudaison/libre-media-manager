@@ -11,7 +11,7 @@
   "baseline_status": {
     "test_command": "./mvnw test",
     "result": "pass",
-    "tests_run": 55,
+    "tests_run": 69,
     "failures": 0
   },
   "todos": [
@@ -327,7 +327,7 @@
       "id": "TODO-020",
       "priority": "P1",
       "title": "Expand GET /media filtering and sorting for richer media metadata",
-      "details": "Completed 2026-04-05. Expanded GET /media to support mediaType, status, language, releasedBefore, and releasedAfter filters; validated inclusive release-date bounds; expanded sort handling to mediaId, title, mediaType, status, releaseDate, createdAt, and updatedAt; switched the repository/service path to JPA specifications; and added controller/service/integration coverage for combined filters and invalid parameter handling.",
+      "details": "Completed 2026-04-05. Expanded GET /media to support parentId, mediaType, status, language, releasedBefore, and releasedAfter filters; validated inclusive release-date bounds; expanded sort handling to mediaId, parentId, title, mediaType, status, releaseDate, createdAt, and updatedAt; switched the repository/service path to JPA specifications; and added controller/service/integration coverage for combined filters and invalid parameter handling.",
       "key_files": [
         "docs/media-domain-spec.md",
         "src/main/java/net/creft/lmm/controller/MediaController.java",
@@ -337,8 +337,8 @@
         "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
       ],
       "acceptance_criteria": [
-        "GET /media supports mediaType, status, language, releasedBefore, and releasedAfter filters.",
-        "Sorting allows title, mediaType, status, releaseDate, createdAt, and updatedAt.",
+        "GET /media supports parentId, mediaType, status, language, releasedBefore, and releasedAfter filters.",
+        "Sorting allows mediaId, parentId, title, mediaType, status, releaseDate, createdAt, and updatedAt.",
         "Invalid filter or sort input returns HTTP 400 with clear field-level errors."
       ],
       "status": "done"
@@ -347,39 +347,40 @@
       "id": "TODO-021",
       "priority": "P2",
       "title": "Align scalar normalization and validation with the domain spec",
-      "details": "Make the scalar Media contract behave consistently across create, update, and list flows. Title should be trimmed before persist, blank optional strings should collapse to null, numeric fields should validate positively, and enum failures should be explicit and test-covered.",
+      "details": "Completed 2026-04-05. Tightened scalar-contract validation so request-body enum/date/type parse failures now return field-level validation errors via GlobalExceptionHandler instead of a generic malformed-JSON response, added update-path normalization coverage to prove trimmed titles and blank optional strings still collapse correctly, and expanded controller/integration tests for invalid body values and immutable mediaId behavior through update assertions.",
       "key_files": [
         "docs/media-domain-spec.md",
         "src/main/java/net/creft/lmm/service/MediaServiceImpl.java",
-        "src/main/java/net/creft/lmm/dto/CreateMediaRequest.java",
-        "src/main/java/net/creft/lmm/dto/UpdateMediaRequest.java",
+        "src/main/java/net/creft/lmm/exception/GlobalExceptionHandler.java",
         "src/test/java/net/creft/lmm/service/MediaServiceImplTest.java",
-        "src/test/java/net/creft/lmm/controller/MediaControllerTest.java"
+        "src/test/java/net/creft/lmm/controller/MediaControllerTest.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
       ],
       "acceptance_criteria": [
         "Title is normalized before persistence and mediaId remains immutable.",
         "Blank optional strings persist as null and numeric validation matches the spec.",
         "Edge-case normalization and enum-validation failures are covered by tests."
       ],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TODO-022",
       "priority": "P2",
       "title": "Refresh docs and regression coverage for the richer media contract",
-      "details": "Once the Phase 1 Media contract lands, refresh the public-facing docs and test suite so the richer schema, defaults, and list behavior are documented and protected against regressions.",
+      "details": "Completed 2026-04-05. Refreshed README and docs/media-domain-spec.md around the shipped richer Media contract, first-class parentId behavior, and COLLECTION/EPISODE support; updated the TODO tracker baseline; and expanded the OpenAPI integration assertions so the published schema advertises the richer filters, fields, and enum values.",
       "key_files": [
         "README.md",
-        "src/main/java/net/creft/lmm/controller/MediaController.java",
-        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java",
-        "src/test/java/net/creft/lmm/repository/MediaRepositoryTest.java"
+        "docs/media-domain-spec.md",
+        "TODO_AGENT.md",
+        "TODO_AGENT.json",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
       ],
       "acceptance_criteria": [
-        "README and OpenAPI examples reflect the richer Media shape and default status behavior.",
-        "Integration and repository coverage asserts timestamps, updated response fields, and migration-backed defaults.",
-        "The public API contract remains explicit and does not expose JPA internals."
+        "README and OpenAPI examples reflect the richer Media shape, parentId behavior, and current media types.",
+        "Regression coverage asserts the published schema exposes current filters, response fields, and enum values.",
+        "The public API contract remains explicit and aligned with the shipped implementation."
       ],
-      "status": "pending"
+      "status": "done"
     }
   ]
 }

@@ -1,6 +1,8 @@
 package net.creft.lmm.model;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -8,7 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -27,6 +29,9 @@ public class Media {
 
     @Column(nullable = false, unique = true, length = 36)
     private String mediaId;
+
+    @Column(length = 36)
+    private String parentId;
 
     @Column(nullable = false, length = 255)
     private String title;
@@ -60,12 +65,8 @@ public class Media {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    @OneToMany(
-            mappedBy = "media",
-            cascade = jakarta.persistence.CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.EAGER
-    )
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "media_file", joinColumns = @JoinColumn(name = "media_id", referencedColumnName = "id"))
     @OrderColumn(name = "file_order")
     private List<MediaFile> mediaFiles = new ArrayList<>();
 
@@ -98,6 +99,14 @@ public class Media {
 
     public void setMediaId(String mediaId) {
         this.mediaId = mediaId;
+    }
+
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
     }
 
     public String getTitle() {
@@ -199,7 +208,6 @@ public class Media {
     }
 
     public void addMediaFile(MediaFile mediaFile) {
-        mediaFile.setMedia(this);
         this.mediaFiles.add(mediaFile);
     }
 

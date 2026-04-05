@@ -19,7 +19,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -52,11 +54,14 @@ class MediaIntegrationTest {
 
     @Test
     void createGetUpdateDeleteMedia_EndToEnd() throws Exception {
+        String collectionId = createMediaAndReturnId("Arrival Collection", MediaType.COLLECTION);
+
         String createResponseBody = mockMvc.perform(post("/media")
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "title": "Arrival",
+                                  "parentId": "%s",
                                   "originalTitle": "Story of Your Life",
                                   "mediaType": "MOVIE",
                                   "summary": "A linguist is recruited to communicate with extraterrestrial visitors.",
@@ -74,10 +79,11 @@ class MediaIntegrationTest {
                                     }
                                   ]
                                 }
-                                """))
+                                """.formatted(collectionId)))
                 .andExpect(status().isCreated())
                 .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.mediaId").isString())
+                .andExpect(jsonPath("$.parentId").value(collectionId))
                 .andExpect(jsonPath("$.title").value("Arrival"))
                 .andExpect(jsonPath("$.originalTitle").value("Story of Your Life"))
                 .andExpect(jsonPath("$.mediaType").value("MOVIE"))
@@ -105,6 +111,7 @@ class MediaIntegrationTest {
         mockMvc.perform(get("/media/{mediaId}", mediaId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
+                .andExpect(jsonPath("$.parentId").value(collectionId))
                 .andExpect(jsonPath("$.title").value("Arrival"))
                 .andExpect(jsonPath("$.originalTitle").value("Story of Your Life"))
                 .andExpect(jsonPath("$.mediaType").value("MOVIE"))
@@ -117,11 +124,14 @@ class MediaIntegrationTest {
                 .andExpect(jsonPath("$.mediaFiles[0].label").value("Main Feature"))
                 .andExpect(jsonPath("$.mediaFiles[0].primaryFile").value(true));
 
+        String archivedCollectionId = createMediaAndReturnId("Archived Arrival Collection", MediaType.COLLECTION);
+
         String updateResponseBody = mockMvc.perform(put("/media/{mediaId}", mediaId)
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "title": "Arrival (Updated)",
+                                  "parentId": "%s",
                                   "originalTitle": "Story of Your Life",
                                   "mediaType": "MOVIE",
                                   "status": "ARCHIVED",
@@ -148,9 +158,10 @@ class MediaIntegrationTest {
                                     }
                                   ]
                                 }
-                                """))
+                                """.formatted(archivedCollectionId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mediaId").value(mediaId))
+                .andExpect(jsonPath("$.parentId").value(archivedCollectionId))
                 .andExpect(jsonPath("$.title").value("Arrival (Updated)"))
                 .andExpect(jsonPath("$.originalTitle").value("Story of Your Life"))
                 .andExpect(jsonPath("$.mediaType").value("MOVIE"))
@@ -295,7 +306,10 @@ class MediaIntegrationTest {
 
     @Test
     void listMedia_WithRichFiltersAndSorting_ReturnsPagedDtoResponse() throws Exception {
-        mediaRepository.saveAndFlush(buildSeedMedia(
+        mediaRepository.saveAndFlush(new Media("collection-1", "Collection One"));
+        mediaRepository.saveAndFlush(new Media("collection-2", "Collection Two"));
+
+        Media ringDocumentary = buildSeedMedia(
                 "media-1",
                 "Ring Documentary",
                 MediaType.MOVIE,
@@ -303,8 +317,9 @@ class MediaIntegrationTest {
                 "en",
                 LocalDate.parse("2015-01-01"),
                 List.of(new MediaFile("/srv/media/lotr.mkv", "Main Feature", "video/x-matroska", 9340032000L, 10800, true))
-        ));
-        mediaRepository.saveAndFlush(buildSeedMedia(
+        );
+        ringDocumentary.setParentId("collection-1");
+        Media lordOfTheRings = buildSeedMedia(
                 "media-2",
                 "Lord of the Rings",
                 MediaType.MOVIE,
@@ -312,8 +327,11 @@ class MediaIntegrationTest {
                 "EN",
                 LocalDate.parse("2016-01-01"),
                 List.of(new MediaFile("/srv/media/lotr-extended.mkv", "Extended Edition", "video/x-matroska", 12340032000L, 12800, true))
-        ));
-        mediaRepository.saveAndFlush(buildSeedMedia(
+        );
+        lordOfTheRings.setParentId("collection-1");
+        mediaRepository.saveAndFlush(ringDocumentary);
+        mediaRepository.saveAndFlush(lordOfTheRings);
+        Media archivedBook = buildSeedMedia(
                 "media-3",
                 "Ring",
                 MediaType.BOOK,
@@ -321,7 +339,9 @@ class MediaIntegrationTest {
                 "en",
                 LocalDate.parse("2016-06-01"),
                 List.of(new MediaFile("/srv/media/ring.mkv", "Main Feature", "video/mp4", 4340032000L, 6900, true))
-        ));
+        );
+        archivedBook.setParentId("collection-2");
+        mediaRepository.saveAndFlush(archivedBook);
         mediaRepository.saveAndFlush(buildSeedMedia(
                 "media-4",
                 "Arrival",
@@ -334,6 +354,7 @@ class MediaIntegrationTest {
 
         mockMvc.perform(get("/media")
                         .param("title", "ring")
+                        .param("parentId", "collection-1")
                         .param("mediaType", "MOVIE")
                         .param("status", "ACTIVE")
                         .param("language", "en")
@@ -347,6 +368,7 @@ class MediaIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.items.length()").value(2))
                 .andExpect(jsonPath("$.items[0].mediaId").value("media-2"))
+                .andExpect(jsonPath("$.items[0].parentId").value("collection-1"))
                 .andExpect(jsonPath("$.items[0].title").value("Lord of the Rings"))
                 .andExpect(jsonPath("$.items[0].mediaType").value("MOVIE"))
                 .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
@@ -356,6 +378,7 @@ class MediaIntegrationTest {
                 .andExpect(jsonPath("$.items[0].mediaFiles[0].label").value("Extended Edition"))
                 .andExpect(jsonPath("$.items[0].mediaFiles[0].primaryFile").value(true))
                 .andExpect(jsonPath("$.items[1].mediaId").value("media-1"))
+                .andExpect(jsonPath("$.items[1].parentId").value("collection-1"))
                 .andExpect(jsonPath("$.items[1].title").value("Ring Documentary"))
                 .andExpect(jsonPath("$.items[1].mediaType").value("MOVIE"))
                 .andExpect(jsonPath("$.items[1].status").value("ACTIVE"))
@@ -399,6 +422,24 @@ class MediaIntegrationTest {
     }
 
     @Test
+    void createMedia_WhenParentIdDoesNotExist_ReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/media")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Arrival",
+                                  "mediaType": "MOVIE",
+                                  "parentId": "missing-parent"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.parentId").value("parentId must reference an existing mediaId"));
+    }
+
+    @Test
     void createMedia_WhenRuntimeMinutesNonPositive_ReturnsValidationError() throws Exception {
         mockMvc.perform(post("/media")
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
@@ -414,6 +455,62 @@ class MediaIntegrationTest {
                 .andExpect(jsonPath("$.error").value("Validation failed"))
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.fieldErrors.runtimeMinutes").value("runtimeMinutes must be greater than 0"));
+    }
+
+    @Test
+    void createMedia_WhenMediaTypeEnumInvalid_ReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/media")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Arrival",
+                                  "mediaType": "NOT_A_TYPE"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.mediaType").value("mediaType must be a valid value"));
+    }
+
+    @Test
+    void updateMedia_WhenReleaseDateInvalid_ReturnsValidationError() throws Exception {
+        mockMvc.perform(put("/media/{mediaId}", "ignored-id")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Arrival",
+                                  "mediaType": "MOVIE",
+                                  "releaseDate": "11-11-2016"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.releaseDate").value("releaseDate must be a valid value"));
+    }
+
+    @Test
+    void updateMedia_WhenParentIdCreatesCycle_ReturnsValidationError() throws Exception {
+        String collectionId = createMediaAndReturnId("Collection", MediaType.COLLECTION);
+        String childId = createMediaAndReturnId("Child", MediaType.MOVIE, collectionId);
+
+        mockMvc.perform(put("/media/{mediaId}", collectionId)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Collection",
+                                  "mediaType": "COLLECTION",
+                                  "parentId": "%s"
+                                }
+                                """.formatted(childId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.parentId").value("parentId cannot create a cycle"));
     }
 
     @Test
@@ -453,7 +550,21 @@ class MediaIntegrationTest {
                 .andExpect(jsonPath("$.error").value("Validation failed"))
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.fieldErrors.sort")
-                        .value("sort must be one of [mediaId, title, mediaType, status, releaseDate, createdAt, updatedAt]"));
+                        .value("sort must be one of [mediaId, parentId, title, mediaType, status, releaseDate, createdAt, updatedAt]"));
+    }
+
+    @Test
+    void deleteMedia_WhenDeletedMediaIsParent_ClearsChildParentId() throws Exception {
+        String collectionId = createMediaAndReturnId("Collection", MediaType.COLLECTION);
+        String childId = createMediaAndReturnId("Child", MediaType.MOVIE, collectionId);
+
+        mockMvc.perform(delete("/media/{mediaId}", collectionId))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/media/{mediaId}", childId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mediaId").value(childId))
+                .andExpect(jsonPath("$.parentId").value(nullValue()));
     }
 
     @Test
@@ -463,10 +574,41 @@ class MediaIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.info.title").value("Libre Media Manager API"))
                 .andExpect(jsonPath("$['paths']['/media']['get']['summary']").value("List media"))
+                .andExpect(jsonPath("$['paths']['/media']['get']['parameters'][*]['name']").value(hasItems(
+                        "title",
+                        "parentId",
+                        "mediaType",
+                        "status",
+                        "language",
+                        "releasedBefore",
+                        "releasedAfter",
+                        "page",
+                        "size",
+                        "sort",
+                        "direction"
+                )))
                 .andExpect(jsonPath("$['paths']['/media']['post']['summary']").value("Create media"))
                 .andExpect(jsonPath("$['paths']['/media/{mediaId}']['get']['summary']").value("Get media"))
                 .andExpect(jsonPath("$['paths']['/media/{mediaId}']['put']['summary']").value("Update media"))
-                .andExpect(jsonPath("$['paths']['/media/{mediaId}']['delete']['summary']").value("Delete media"));
+                .andExpect(jsonPath("$['paths']['/media/{mediaId}']['delete']['summary']").value("Delete media"))
+                .andExpect(jsonPath("$.components.schemas.MediaResponse.properties.parentId").exists())
+                .andExpect(jsonPath("$.components.schemas.MediaResponse.properties.createdAt").exists())
+                .andExpect(jsonPath("$.components.schemas.MediaResponse.properties.updatedAt").exists())
+                .andExpect(jsonPath("$.components.schemas.MediaResponse.properties.mediaFiles").exists())
+                .andExpect(jsonPath("$.components.schemas.MediaResponse.properties.mediaType.enum").value(hasItems(
+                        "MOVIE",
+                        "EPISODE",
+                        "COLLECTION"
+                )))
+                .andExpect(jsonPath("$.components.schemas.CreateMediaRequest.properties.mediaType.enum").value(hasItems(
+                        "MOVIE",
+                        "EPISODE",
+                        "COLLECTION"
+                )))
+                .andExpect(jsonPath("$.components.schemas.CreateMediaRequest.required").value(hasItems(
+                        "title",
+                        "mediaType"
+                )));
     }
 
     @Test
@@ -492,6 +634,34 @@ class MediaIntegrationTest {
                 .andExpect(header().string(REQUEST_ID_HEADER, matchesPattern(
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
                 )));
+    }
+
+    private String createMediaAndReturnId(String title, MediaType mediaType) throws Exception {
+        return createMediaAndReturnId(title, mediaType, null);
+    }
+
+    private String createMediaAndReturnId(String title, MediaType mediaType, String parentId) throws Exception {
+        String responseBody = mockMvc.perform(post("/media")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "%s",
+                                  "parentId": %s,
+                                  "mediaType": "%s"
+                                }
+                                """.formatted(
+                                        title,
+                                        parentId == null ? "null" : "\"" + parentId + "\"",
+                                        mediaType.name()
+                                )))
+                .andExpect(status().isCreated())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.mediaId").isString())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readTree(responseBody).path("mediaId").asText();
     }
 
     private Media buildSeedMedia(
