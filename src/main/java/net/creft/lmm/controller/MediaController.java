@@ -13,17 +13,23 @@ import net.creft.lmm.dto.MediaFileRequest;
 import net.creft.lmm.dto.UpdateMediaRequest;
 import net.creft.lmm.exception.ApiErrorResponse;
 import net.creft.lmm.exception.InvalidRequestParameterException;
+import net.creft.lmm.model.MediaStatus;
+import net.creft.lmm.model.MediaType;
 import net.creft.lmm.response.MediaPageResponse;
 import net.creft.lmm.response.MediaResponse;
+import net.creft.lmm.service.MediaDraft;
 import net.creft.lmm.service.MediaFileDraft;
+import net.creft.lmm.service.MediaSearchCriteria;
 import net.creft.lmm.service.MediaService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -36,7 +42,8 @@ public class MediaController {
     private static final int MAX_PAGE_SIZE = 100;
     private static final String DEFAULT_SORT_FIELD = "title";
     private static final String DEFAULT_SORT_DIRECTION = "asc";
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("mediaId", "title");
+    private static final Set<String> ALLOWED_SORT_FIELDS =
+            Set.of("mediaId", "title", "mediaType", "status", "releaseDate", "createdAt", "updatedAt");
 
     private final MediaService mediaService;
 
@@ -47,7 +54,7 @@ public class MediaController {
     @GetMapping("/media")
     @Operation(
             summary = "List media",
-            description = "Returns paginated media results with optional case-insensitive title filtering."
+            description = "Returns paginated media results with optional filtering by title, mediaType, status, language, and release-date bounds."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Media page returned"),
@@ -60,17 +67,31 @@ public class MediaController {
     public ResponseEntity<MediaPageResponse> listMedia(
             @Parameter(description = "Optional case-insensitive title filter", example = "arrival")
             @RequestParam(required = false) String title,
+            @Parameter(description = "Optional media type filter", example = "MOVIE")
+            @RequestParam(required = false) MediaType mediaType,
+            @Parameter(description = "Optional lifecycle status filter", example = "ACTIVE")
+            @RequestParam(required = false) MediaStatus status,
+            @Parameter(description = "Optional case-insensitive language filter", example = "en")
+            @RequestParam(required = false) String language,
+            @Parameter(description = "Optional inclusive upper release-date bound", example = "2016-12-31")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate releasedBefore,
+            @Parameter(description = "Optional inclusive lower release-date bound", example = "2016-01-01")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate releasedAfter,
             @Parameter(description = "Zero-based page number", example = "0")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size between 1 and 100", example = "20")
             @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field. Allowed values: mediaId, title", example = "title")
+            @Parameter(description = "Sort field. Allowed values: mediaId, title, mediaType, status, releaseDate, createdAt, updatedAt", example = "title")
             @RequestParam(defaultValue = DEFAULT_SORT_FIELD) String sort,
             @Parameter(description = "Sort direction. Allowed values: asc, desc", example = "asc")
             @RequestParam(defaultValue = DEFAULT_SORT_DIRECTION) String direction
     ) {
         Pageable pageable = buildPageRequest(page, size, sort, direction);
-        return ResponseEntity.ok(MediaPageResponse.from(mediaService.listMedia(title, pageable)));
+        validateReleaseDateRange(releasedAfter, releasedBefore);
+        return ResponseEntity.ok(MediaPageResponse.from(mediaService.listMedia(
+                new MediaSearchCriteria(title, mediaType, status, language, releasedBefore, releasedAfter),
+                pageable
+        )));
     }
 
     @GetMapping("/media/{mediaId}")
@@ -103,9 +124,8 @@ public class MediaController {
             )
     })
     public ResponseEntity<MediaResponse> createMedia(@Valid @RequestBody CreateMediaRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(MediaResponse.from(
-                mediaService.createMedia(request.getTitle(), extractMediaFiles(request.getMediaFiles()))
-        ));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(MediaResponse.from(mediaService.createMedia(toMediaDraft(request))));
     }
 
     @PutMapping("/media/{mediaId}")
@@ -130,9 +150,7 @@ public class MediaController {
     })
     public ResponseEntity<MediaResponse> updateMedia(@PathVariable String mediaId,
                                                      @Valid @RequestBody UpdateMediaRequest updateRequest) {
-        return ResponseEntity.ok(MediaResponse.from(
-                mediaService.updateMedia(mediaId, updateRequest.getTitle(), extractMediaFiles(updateRequest.getMediaFiles()))
-        ));
+        return ResponseEntity.ok(MediaResponse.from(mediaService.updateMedia(mediaId, toMediaDraft(updateRequest))));
     }
 
     @DeleteMapping("/media/{mediaId}")
@@ -160,7 +178,10 @@ public class MediaController {
 
         String normalizedSort = sort == null ? DEFAULT_SORT_FIELD : sort.trim();
         if (!ALLOWED_SORT_FIELDS.contains(normalizedSort)) {
-            throw new InvalidRequestParameterException("sort", "sort must be one of [mediaId, title]");
+            throw new InvalidRequestParameterException(
+                    "sort",
+                    "sort must be one of [mediaId, title, mediaType, status, releaseDate, createdAt, updatedAt]"
+            );
         }
 
         Sort.Direction sortDirection = Sort.Direction.fromOptionalString(direction)
@@ -193,5 +214,42 @@ public class MediaController {
         if (primaryFiles > 1) {
             throw new InvalidRequestParameterException("mediaFiles", MULTIPLE_PRIMARY_FILES_MESSAGE);
         }
+    }
+
+    private void validateReleaseDateRange(LocalDate releasedAfter, LocalDate releasedBefore) {
+        if (releasedAfter != null && releasedBefore != null && releasedAfter.isAfter(releasedBefore)) {
+            throw new InvalidRequestParameterException(
+                    "releasedAfter",
+                    "releasedAfter must be on or before releasedBefore"
+            );
+        }
+    }
+
+    private MediaDraft toMediaDraft(CreateMediaRequest request) {
+        return new MediaDraft(
+                request.getTitle(),
+                request.getOriginalTitle(),
+                request.getMediaType(),
+                request.getStatus(),
+                request.getSummary(),
+                request.getReleaseDate(),
+                request.getRuntimeMinutes(),
+                request.getLanguage(),
+                extractMediaFiles(request.getMediaFiles())
+        );
+    }
+
+    private MediaDraft toMediaDraft(UpdateMediaRequest request) {
+        return new MediaDraft(
+                request.getTitle(),
+                request.getOriginalTitle(),
+                request.getMediaType(),
+                request.getStatus(),
+                request.getSummary(),
+                request.getReleaseDate(),
+                request.getRuntimeMinutes(),
+                request.getLanguage(),
+                extractMediaFiles(request.getMediaFiles())
+        );
     }
 }

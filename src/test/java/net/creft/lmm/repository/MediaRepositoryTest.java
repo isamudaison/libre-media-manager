@@ -2,15 +2,19 @@ package net.creft.lmm.repository;
 
 import net.creft.lmm.model.Media;
 import net.creft.lmm.model.MediaFile;
+import net.creft.lmm.model.MediaStatus;
+import net.creft.lmm.model.MediaType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DataJpaTest(showSql = false)
@@ -67,6 +71,8 @@ class MediaRepositoryTest {
 
         Media saved = mediaRepository.saveAndFlush(media);
 
+        assertEquals(MediaType.OTHER, saved.getMediaType());
+        assertEquals(MediaStatus.ACTIVE, saved.getStatus());
         assertEquals(2, saved.getMediaFiles().size());
         assertEquals("/srv/media/arrival-1080p.mkv", saved.getMediaFiles().get(0).getLocation());
         assertEquals("/srv/media/arrival-4k.mkv", saved.getMediaFiles().get(1).getLocation());
@@ -77,5 +83,31 @@ class MediaRepositoryTest {
         assertEquals(false, saved.getMediaFiles().get(0).isPrimaryFile());
         assertEquals("4K Remux", saved.getMediaFiles().get(1).getLabel());
         assertEquals(true, saved.getMediaFiles().get(1).isPrimaryFile());
+        assertNotNull(saved.getCreatedAt());
+        assertNotNull(saved.getUpdatedAt());
+    }
+
+    @Test
+    void saveMediaWithRichMetadata_PersistsScalarFieldsAndTimestamps() {
+        Media media = new Media("media-4", "Arrival");
+        media.setOriginalTitle("Story of Your Life");
+        media.setMediaType(MediaType.MOVIE);
+        media.setStatus(MediaStatus.ARCHIVED);
+        media.setSummary("A linguist is recruited to communicate with extraterrestrial visitors.");
+        media.setReleaseDate(LocalDate.parse("2016-11-11"));
+        media.setRuntimeMinutes(116);
+        media.setLanguage("en");
+
+        Media saved = mediaRepository.saveAndFlush(media);
+
+        assertEquals("Story of Your Life", saved.getOriginalTitle());
+        assertEquals(MediaType.MOVIE, saved.getMediaType());
+        assertEquals(MediaStatus.ARCHIVED, saved.getStatus());
+        assertEquals("A linguist is recruited to communicate with extraterrestrial visitors.", saved.getSummary());
+        assertEquals(LocalDate.parse("2016-11-11"), saved.getReleaseDate());
+        assertEquals(116, saved.getRuntimeMinutes());
+        assertEquals("en", saved.getLanguage());
+        assertNotNull(saved.getCreatedAt());
+        assertNotNull(saved.getUpdatedAt());
     }
 }

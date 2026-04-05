@@ -1,15 +1,12 @@
 package net.creft.lmm.repository;
 
 import net.creft.lmm.model.Media;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface MediaRepository extends JpaRepository<Media, Long> {
+public interface MediaRepository extends JpaRepository<Media, Long>, JpaSpecificationExecutor<Media> {
 
     Media findByMediaId(String mediaId);
-
-    Page<Media> findByTitleContainingIgnoreCase(String title, Pageable pageable);
 }

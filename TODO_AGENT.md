@@ -1,6 +1,6 @@
 # Agent TODOs: libre-media-manager
 
-Last updated: 2026-03-30
+Last updated: 2026-04-05
 
 This file is intended for AI/human agents to quickly understand project intent and execute the highest-value next tasks.
 
@@ -30,7 +30,44 @@ Build a Spring Boot backend service for managing media metadata, media relations
 | TODO-016 | P2 | Add OpenAPI documentation. (`done`) | `pom.xml`, `src/main/java/net/creft/lmm/controller/MediaController.java`, `README.md` | Developers can view generated API docs locally at `/v3/api-docs`. |
 | TODO-017 | P2 | Clean test/runtime warnings. (`done`) | `pom.xml`, `src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker`, `src/test/resources/logback-test.xml`, `src/main/resources/application.properties`, `src/main/resources/application-test.properties` | Test runs are warning-free and less noisy. |
 | TODO-018 | P2 | Add operational basics. (`done`) | `pom.xml`, `src/main/resources/application.properties`, `src/main/resources/application-test.properties`, `src/main/java/net/creft/lmm/config/RequestCorrelationFilter.java`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java` | Health checks and request correlation are available. |
-| TODO-019 | P2 | Expand the domain model. | `docs/project-spec.md`, `docs/media-domain-spec.md`, `docs/taxonomy-spec.md`, `src/main/java/net/creft/lmm/model/Media.java`, `src/main/java/net/creft/lmm/dto/`, `src/main/java/net/creft/lmm/response/` | Media schema/API reflect agreed product fields. |
+| TODO-019 | P1 | Complete Phase 1 core media metadata on `Media`. (`done`) | `docs/media-domain-spec.md`, `src/main/java/net/creft/lmm/model/Media.java`, `src/main/resources/db/migration/`, `src/main/java/net/creft/lmm/dto/`, `src/main/java/net/creft/lmm/response/` | `mediaType` is required on create/update, `status` defaults to `ACTIVE`, richer scalar metadata/timestamps are persisted and exposed, and the migration safely backfills existing rows. |
+| TODO-020 | P1 | Expand `GET /media` filtering and sorting for the richer metadata model. (`done`) | `src/main/java/net/creft/lmm/controller/MediaController.java`, `src/main/java/net/creft/lmm/repository/MediaRepository.java`, `src/main/java/net/creft/lmm/service/MediaServiceImpl.java`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java` | `GET /media` supports `mediaType`, `status`, `language`, `releasedBefore`, and `releasedAfter` filters plus the agreed sortable fields; invalid params return `400` with field errors. |
+| TODO-021 | P2 | Align normalization and validation with the domain spec. | `docs/media-domain-spec.md`, `src/main/java/net/creft/lmm/service/MediaServiceImpl.java`, `src/main/java/net/creft/lmm/dto/`, `src/test/java/net/creft/lmm/service/MediaServiceImplTest.java` | `title` is trimmed before persist, blank optional strings collapse to `null`, numeric/enums validate cleanly, and tests cover edge-case normalization. |
+| TODO-022 | P2 | Refresh docs and regression coverage for the richer media contract. | `README.md`, `src/main/java/net/creft/lmm/controller/MediaController.java`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java`, `src/test/java/net/creft/lmm/repository/MediaRepositoryTest.java` | README/OpenAPI/examples reflect the richer schema and tests cover timestamps, default status behavior, and the updated response shape. |
+
+## Completed Slice Design
+
+This slice landed on 2026-04-04 and is now the baseline for the remaining Phase 1 follow-up work.
+
+### In Scope
+
+- keep `Media` as the primary aggregate and retain the existing `mediaFiles` child collection
+- add scalar metadata fields: `originalTitle`, `mediaType`, `status`, `summary`, `releaseDate`, `runtimeMinutes`, `language`, `createdAt`, `updatedAt`
+- introduce `MediaType` and `MediaStatus` enums from the domain spec
+- require `mediaType` on create/update and default `status` to `ACTIVE` when omitted
+- expand `GET /media` filtering and sorting to use the new metadata
+- normalize scalar inputs so `title` is trimmed and blank optional strings persist as `null`
+
+### Out Of Scope
+
+- categories, tags, ratings, or any taxonomy resource implementation
+- external provider IDs or sync concerns
+- hierarchy/composite media modeling such as seasons, episodes, or tracks
+- `PATCH` semantics or partial-update design changes
+
+### Contract Decisions
+
+- `mediaId` remains immutable and server-generated
+- `createdAt` and `updatedAt` are server-managed only
+- `mediaFiles` remain request-ordered and keep the current single-primary-file rule
+- taxonomy stays modeled as separate resources later; do not add ad hoc category/tag/rating strings to `Media`
+
+### Suggested Implementation Order
+
+1. Add `MediaType`/`MediaStatus` enums and a Flyway migration that expands the `media` table with safe defaults/backfill values plus supporting indexes.
+2. Update entity, service, DTO, and response layers so create/update/read/list all expose the richer scalar contract while preserving the current `mediaFiles` behavior.
+3. Expand `GET /media` filters/sort validation and repository queries for the new fields.
+4. Extend repository, service, controller, and integration coverage; then refresh README/OpenAPI examples around the richer contract.
 
 ## Status Notes
 
@@ -52,9 +89,12 @@ Build a Spring Boot backend service for managing media metadata, media relations
 - `TODO-016`: `done` (2026-03-29). Added generated OpenAPI metadata for the current endpoints, documented the local docs endpoint at `/v3/api-docs`, and added integration coverage for the published contract. The API-only Springdoc starter is used because the Swagger UI starter was not compatible with the current Spring Boot 3.4.4 stack in this project.
 - `TODO-017`: `done` (2026-03-29). Removed the Mockito self-attach warning by running tests with the Mockito Java agent, forced `debug=false` under Surefire so an ambient `DEBUG` environment variable cannot enable noisy Spring Boot debug output during tests, suppressed Spring test/bootstrap and Springdoc chatter with a test-only Logback config, disabled repository-test SQL echoing, and tightened the `test` profile logging. `./mvnw test` remains green and `./mvnw -q test` is silent on success.
 - `TODO-018`: `done` (2026-03-29). Added Spring Boot Actuator health/info endpoints, enabled health probes, propagated or generated `X-Request-Id` values through a request-correlation filter, and included the request ID in the runtime log pattern. Integration tests cover `/actuator/health` plus request ID echo/generation behavior.
-- `TODO-019`: `in progress` (2026-03-30). Added a `MediaFile` child collection to `Media`, expanded it to include `label`, `mimeType`, `sizeBytes`, `durationSeconds`, and `primaryFile`, exposed the richer shape through create/update/read/list API contracts, enforced positive numeric validation plus a single-primary-file rule, and added Flyway migrations `V2__create_media_file_table.sql` and `V3__expand_media_file_table.sql` with persistence/controller/integration test coverage. Broader domain expansion remains pending.
+- `TODO-019`: `done` (2026-04-04). Implemented the Phase 1 core `Media` metadata slice from `docs/media-domain-spec.md`: added `MediaType`/`MediaStatus` enums, `originalTitle`, `summary`, `releaseDate`, `runtimeMinutes`, `language`, `createdAt`, and `updatedAt`; defaulted `status` to `ACTIVE`; required `mediaType` on create/update; added Flyway migration `V4__expand_media_table.sql`; normalized title/optional scalar handling in the service layer; and expanded repository/controller/integration coverage for the richer response contract.
+- `TODO-020`: `done` (2026-04-05). Expanded `GET /media` to accept `mediaType`, `status`, `language`, `releasedBefore`, and `releasedAfter` filters on top of title search; added inclusive release-date range validation; expanded sortable fields to `mediaId`, `title`, `mediaType`, `status`, `releaseDate`, `createdAt`, and `updatedAt`; switched repository querying to JPA specifications; and added controller/service/integration coverage for combined filters plus invalid parameter contracts.
+- `TODO-021`: `pending` (2026-04-04). Lock down normalization and validation rules so scalar field handling matches the domain spec and remains migration-safe.
+- `TODO-022`: `pending` (2026-04-04). Refresh docs and regression coverage once the richer contract exists so the public API stays understandable and well-covered.
 
 ## Baseline Status
 
 - Test command: `./mvnw test`
-- Result at last scan: PASS (`44` tests, `0` failures)
+- Result at last scan: PASS (`55` tests, `0` failures) re-verified on 2026-04-05

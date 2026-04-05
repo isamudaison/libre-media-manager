@@ -1,7 +1,7 @@
 {
   "metadata": {
     "project": "libre-media-manager",
-    "last_updated": "2026-03-30",
+    "last_updated": "2026-04-05",
     "intended_consumers": [
       "ai_agent",
       "human_developer"
@@ -11,7 +11,7 @@
   "baseline_status": {
     "test_command": "./mvnw test",
     "result": "pass",
-    "tests_run": 44,
+    "tests_run": 55,
     "failures": 0
   },
   "todos": [
@@ -303,23 +303,83 @@
     },
     {
       "id": "TODO-019",
-      "priority": "P2",
-      "title": "Expand the domain model",
-      "details": "Decide which fields a real media item needs beyond mediaId and title, then evolve persistence, DTOs, and tests accordingly. Draft domain spec captured in docs/media-domain-spec.md on 2026-03-29. Supporting taxonomy spec for categories, tags, and ratings captured in docs/taxonomy-spec.md on 2026-03-30. Implementation progressed on 2026-03-30 with a MediaFile child collection, richer file metadata fields (label, mimeType, sizeBytes, durationSeconds, primaryFile), API exposure, validation for positive numeric fields plus a single-primary-file rule, and Flyway migrations V2__create_media_file_table.sql and V3__expand_media_file_table.sql.",
+      "priority": "P1",
+      "title": "Complete Phase 1 core media metadata on Media",
+      "details": "Completed 2026-04-04. Implemented the Phase 1 slice from docs/media-domain-spec.md by adding MediaType/MediaStatus enums, originalTitle, mediaType, status, summary, releaseDate, runtimeMinutes, language, createdAt, and updatedAt to Media; defaulting status to ACTIVE; requiring mediaType on create/update; adding Flyway migration V4__expand_media_table.sql; and expanding repository/service/controller/integration coverage around the richer contract.",
       "key_files": [
-        "docs/project-spec.md",
         "docs/media-domain-spec.md",
-        "docs/taxonomy-spec.md",
         "src/main/java/net/creft/lmm/model/Media.java",
-        "src/main/java/net/creft/lmm/model/MediaFile.java",
-        "src/main/java/net/creft/lmm/dto/",
-        "src/main/java/net/creft/lmm/response/"
+        "src/main/java/net/creft/lmm/model/MediaType.java",
+        "src/main/java/net/creft/lmm/model/MediaStatus.java",
+        "src/main/resources/db/migration/V4__expand_media_table.sql",
+        "src/main/java/net/creft/lmm/dto/CreateMediaRequest.java",
+        "src/main/java/net/creft/lmm/dto/UpdateMediaRequest.java",
+        "src/main/java/net/creft/lmm/response/MediaResponse.java"
       ],
       "acceptance_criteria": [
-        "Media model captures agreed product fields.",
-        "API contract and persistence schema stay aligned."
+        "Create/update require mediaType and default status to ACTIVE when omitted.",
+        "Media persistence and response DTOs expose the agreed scalar metadata and server-managed timestamps.",
+        "The Flyway migration safely backfills existing rows and preserves the current mediaFiles behavior."
       ],
-      "status": "in_progress"
+      "status": "done"
+    },
+    {
+      "id": "TODO-020",
+      "priority": "P1",
+      "title": "Expand GET /media filtering and sorting for richer media metadata",
+      "details": "Completed 2026-04-05. Expanded GET /media to support mediaType, status, language, releasedBefore, and releasedAfter filters; validated inclusive release-date bounds; expanded sort handling to mediaId, title, mediaType, status, releaseDate, createdAt, and updatedAt; switched the repository/service path to JPA specifications; and added controller/service/integration coverage for combined filters and invalid parameter handling.",
+      "key_files": [
+        "docs/media-domain-spec.md",
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "src/main/java/net/creft/lmm/repository/MediaRepository.java",
+        "src/main/java/net/creft/lmm/service/MediaServiceImpl.java",
+        "src/test/java/net/creft/lmm/controller/MediaControllerTest.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
+      ],
+      "acceptance_criteria": [
+        "GET /media supports mediaType, status, language, releasedBefore, and releasedAfter filters.",
+        "Sorting allows title, mediaType, status, releaseDate, createdAt, and updatedAt.",
+        "Invalid filter or sort input returns HTTP 400 with clear field-level errors."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-021",
+      "priority": "P2",
+      "title": "Align scalar normalization and validation with the domain spec",
+      "details": "Make the scalar Media contract behave consistently across create, update, and list flows. Title should be trimmed before persist, blank optional strings should collapse to null, numeric fields should validate positively, and enum failures should be explicit and test-covered.",
+      "key_files": [
+        "docs/media-domain-spec.md",
+        "src/main/java/net/creft/lmm/service/MediaServiceImpl.java",
+        "src/main/java/net/creft/lmm/dto/CreateMediaRequest.java",
+        "src/main/java/net/creft/lmm/dto/UpdateMediaRequest.java",
+        "src/test/java/net/creft/lmm/service/MediaServiceImplTest.java",
+        "src/test/java/net/creft/lmm/controller/MediaControllerTest.java"
+      ],
+      "acceptance_criteria": [
+        "Title is normalized before persistence and mediaId remains immutable.",
+        "Blank optional strings persist as null and numeric validation matches the spec.",
+        "Edge-case normalization and enum-validation failures are covered by tests."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TODO-022",
+      "priority": "P2",
+      "title": "Refresh docs and regression coverage for the richer media contract",
+      "details": "Once the Phase 1 Media contract lands, refresh the public-facing docs and test suite so the richer schema, defaults, and list behavior are documented and protected against regressions.",
+      "key_files": [
+        "README.md",
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java",
+        "src/test/java/net/creft/lmm/repository/MediaRepositoryTest.java"
+      ],
+      "acceptance_criteria": [
+        "README and OpenAPI examples reflect the richer Media shape and default status behavior.",
+        "Integration and repository coverage asserts timestamps, updated response fields, and migration-backed defaults.",
+        "The public API contract remains explicit and does not expose JPA internals."
+      ],
+      "status": "pending"
     }
   ]
 }
