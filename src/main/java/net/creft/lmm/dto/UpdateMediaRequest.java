@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import net.creft.lmm.model.MediaStatus;
 import net.creft.lmm.model.MediaType;
@@ -18,6 +19,11 @@ public class UpdateMediaRequest {
     @NotBlank(message = "title is required")
     @Size(max = 255, message = "title must be at most 255 characters")
     private String title;
+
+    @Schema(description = "Required optimistic-lock version from the latest read of this media item", example = "0")
+    @NotNull(message = "version is required")
+    @PositiveOrZero(message = "version must be greater than or equal to 0")
+    private Long version;
 
     @Schema(description = "Optional parent media identifier for lightweight collection grouping", example = "c1c32f42-8919-4d6c-a0d8-9b4d42d2adbe")
     @Size(max = 36, message = "parentId must be at most 36 characters")
@@ -56,17 +62,19 @@ public class UpdateMediaRequest {
     public UpdateMediaRequest() {
     }
 
-    public UpdateMediaRequest(String title, MediaType mediaType) {
+    public UpdateMediaRequest(String title, Long version, MediaType mediaType) {
         this.title = title;
+        this.version = version;
         this.mediaType = mediaType;
     }
 
-    public UpdateMediaRequest(String title, MediaType mediaType, List<MediaFileRequest> mediaFiles) {
-        this(title, null, null, mediaType, null, null, null, null, null, mediaFiles);
+    public UpdateMediaRequest(String title, Long version, MediaType mediaType, List<MediaFileRequest> mediaFiles) {
+        this(title, version, null, null, mediaType, null, null, null, null, null, mediaFiles);
     }
 
     public UpdateMediaRequest(
             String title,
+            Long version,
             String originalTitle,
             MediaType mediaType,
             MediaStatus status,
@@ -76,11 +84,12 @@ public class UpdateMediaRequest {
             String language,
             List<MediaFileRequest> mediaFiles
     ) {
-        this(title, null, originalTitle, mediaType, status, summary, releaseDate, runtimeMinutes, language, mediaFiles);
+        this(title, version, null, originalTitle, mediaType, status, summary, releaseDate, runtimeMinutes, language, mediaFiles);
     }
 
     public UpdateMediaRequest(
             String title,
+            Long version,
             String parentId,
             String originalTitle,
             MediaType mediaType,
@@ -92,6 +101,7 @@ public class UpdateMediaRequest {
             List<MediaFileRequest> mediaFiles
     ) {
         this.title = title;
+        this.version = version;
         this.parentId = parentId;
         this.originalTitle = originalTitle;
         this.mediaType = mediaType;
@@ -109,6 +119,14 @@ public class UpdateMediaRequest {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     public String getParentId() {

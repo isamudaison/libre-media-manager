@@ -1,6 +1,6 @@
 # Agent TODOs: libre-media-manager
 
-Last updated: 2026-04-05
+Last updated: 2026-06-19
 
 This file is intended for AI/human agents to quickly understand project intent and execute the highest-value next tasks.
 
@@ -34,6 +34,10 @@ Build a Spring Boot backend service for managing media metadata, media relations
 | TODO-020 | P1 | Expand `GET /media` filtering and sorting for the richer metadata model. (`done`) | `src/main/java/net/creft/lmm/controller/MediaController.java`, `src/main/java/net/creft/lmm/repository/MediaRepository.java`, `src/main/java/net/creft/lmm/service/MediaServiceImpl.java`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java` | `GET /media` supports `parentId`, `mediaType`, `status`, `language`, `releasedBefore`, and `releasedAfter` filters plus the agreed sortable fields; invalid params return `400` with field errors. |
 | TODO-021 | P2 | Align normalization and validation with the domain spec. (`done`) | `docs/media-domain-spec.md`, `src/main/java/net/creft/lmm/service/MediaServiceImpl.java`, `src/main/java/net/creft/lmm/exception/GlobalExceptionHandler.java`, `src/test/java/net/creft/lmm/service/MediaServiceImplTest.java`, `src/test/java/net/creft/lmm/controller/MediaControllerTest.java`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java` | `title` is trimmed before persist, blank optional strings collapse to `null`, numeric/enums validate cleanly, and tests cover edge-case normalization. |
 | TODO-022 | P2 | Refresh docs and regression coverage for the richer media contract. (`done`) | `README.md`, `docs/media-domain-spec.md`, `TODO_AGENT.md`, `TODO_AGENT.json`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java` | README/OpenAPI/examples reflect the richer schema, `parentId`, and the current media types, and tests cover the updated published response shape. |
+| TODO-023 | P1 | Add optimistic concurrency control for media updates. (`done`) | `src/main/java/net/creft/lmm/model/Media.java`, `src/main/resources/db/migration/V6__add_media_version.sql`, `src/main/java/net/creft/lmm/dto/UpdateMediaRequest.java`, `src/main/java/net/creft/lmm/controller/MediaController.java`, `src/main/java/net/creft/lmm/service/MediaServiceImpl.java`, `src/main/java/net/creft/lmm/exception/GlobalExceptionHandler.java` | Media responses expose a server-managed `version`, `PUT /media/{mediaId}` requires the latest version and returns `409` on stale writes, and regression coverage proves the conflict contract. |
+| TODO-024 | P1 | Promote `MediaFile` to a standalone entity with loose media association. (`done`) | `src/main/java/net/creft/lmm/model/Media.java`, `src/main/java/net/creft/lmm/model/MediaFile.java`, `src/main/java/net/creft/lmm/repository/MediaFileRepository.java`, `src/main/resources/db/migration/V7__promote_media_file_to_entity.sql`, `src/main/java/net/creft/lmm/service/MediaServiceImpl.java`, `src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java` | `MediaFile` persists independently with its own public ID, timestamps, and version; `Media` hydrates files by loose `mediaId` association instead of an embedded collection mapping; and an existing file can belong to at most one media item at a time. |
+| TODO-025 | P1 | Scaffold maintainable client libraries for the current media API. (`done`) | `clients/spec/media-api-contract.json`, `clients/java/`, `clients/javascript/`, `clients/python/`, `README.md` | Java, React-friendly JavaScript, and Python clients expose the current `/media` endpoints with shared model naming, clear docs, and a centralized contract/update workflow that future agents can extend safely. |
+| TODO-026 | P2 | Add client release and publishing automation. | `clients/`, `.github/workflows/`, future package metadata | Client libraries can be versioned and published independently, with CI verifying each package and update instructions covering release steps. |
 
 ## Completed Slice Design
 
@@ -41,8 +45,9 @@ This slice landed on 2026-04-04 and is now the baseline for the remaining Phase 
 
 ### In Scope
 
-- keep `Media` as the primary aggregate and retain the existing `mediaFiles` child collection
+- keep `Media` as the primary catalog record while promoting `MediaFile` to a standalone entity
 - add scalar metadata fields: `originalTitle`, `mediaType`, `status`, `summary`, `releaseDate`, `runtimeMinutes`, `language`, `createdAt`, `updatedAt`
+- keep nested `mediaFiles` support on the current `/media` endpoints while storing files independently
 - introduce `MediaType` and `MediaStatus` enums from the domain spec
 - support lightweight `parentId` relationships and first-class `EPISODE` / `COLLECTION` records without deeper hierarchy semantics
 - require `mediaType` on create/update and default `status` to `ACTIVE` when omitted
@@ -60,6 +65,10 @@ This slice landed on 2026-04-04 and is now the baseline for the remaining Phase 
 
 - `mediaId` remains immutable and server-generated
 - `createdAt` and `updatedAt` are server-managed only
+- `version` is a server-managed optimistic-lock token; `PUT /media/{mediaId}` must submit the latest value
+- `mediaFiles` are standalone entities with their own `mediaFileId`, `createdAt`, `updatedAt`, and `version`
+- `Media` exposes a hydrated ordered file view but no longer models file persistence as an embedded child collection
+- a `MediaFile` can belong to at most one `Media` at a time, and nested `PUT /media/{mediaId}` requests may re-associate an existing file by `mediaFileId` plus file `version`
 - `mediaFiles` remain request-ordered and keep the current single-primary-file rule
 - taxonomy stays modeled as separate resources later; do not add ad hoc category/tag/rating strings to `Media`
 
@@ -94,8 +103,11 @@ This slice landed on 2026-04-04 and is now the baseline for the remaining Phase 
 - `TODO-020`: `done` (2026-04-05). Expanded `GET /media` to accept `parentId`, `mediaType`, `status`, `language`, `releasedBefore`, and `releasedAfter` filters on top of title search; added inclusive release-date range validation; expanded sortable fields to `mediaId`, `parentId`, `title`, `mediaType`, `status`, `releaseDate`, `createdAt`, and `updatedAt`; switched repository querying to JPA specifications; and added controller/service/integration coverage for combined filters plus invalid parameter contracts.
 - `TODO-021`: `done` (2026-04-05). Tightened scalar-contract validation so request-body enum/date/type parse failures now return field-level `400` validation errors instead of a generic malformed-JSON response, added update-path normalization coverage to prove trimmed titles and blank optional strings still collapse correctly, and expanded controller/integration coverage for invalid body values plus immutable `mediaId` behavior through update flow assertions.
 - `TODO-022`: `done` (2026-04-05). Refreshed README and `docs/media-domain-spec.md` around the shipped richer `Media` contract, first-class `parentId`, and `EPISODE` / `COLLECTION` support; updated the TODO tracker baseline; and expanded the OpenAPI integration assertions so the published schema exposes the richer filters, fields, and enum values.
+- `TODO-023`: `done` (2026-06-19). Added a JPA/Flyway-backed `version` column on `Media`, exposed the version in read/create/list responses, required it on `PUT /media/{mediaId}`, mapped stale version mismatches and optimistic-locking races to HTTP `409`, and expanded controller/repository/service/integration coverage for the new conflict contract.
+- `TODO-024`: `done` (2026-06-19). Promoted `MediaFile` from a collection-table value object to a standalone entity with its own public ID, timestamps, and version; added `MediaFileRepository` plus Flyway migration `V7__promote_media_file_to_entity.sql`; shifted `Media` to hydrate files through loose `mediaId` association instead of explicit JPA child persistence; and added integration coverage proving an existing file can be re-associated onto a different media item while belonging to at most one media item at a time.
+- `TODO-025`: `done` (2026-06-19). Added the first client-library slice under `clients/`: a shared machine-readable media contract snapshot plus thin Java, fetch-based JavaScript/React, and Python clients for the shipped `/media` endpoints, with per-client docs and verification coverage for the Java and Python packages.
 
 ## Baseline Status
 
 - Test command: `./mvnw test`
-- Result at last scan: PASS (`69` tests, `0` failures) re-verified on 2026-04-05
+- Result at last scan: PASS (`76` tests, `0` failures) re-verified on 2026-06-19

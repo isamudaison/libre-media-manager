@@ -1,7 +1,7 @@
 {
   "metadata": {
     "project": "libre-media-manager",
-    "last_updated": "2026-04-05",
+    "last_updated": "2026-06-19",
     "intended_consumers": [
       "ai_agent",
       "human_developer"
@@ -11,7 +11,7 @@
   "baseline_status": {
     "test_command": "./mvnw test",
     "result": "pass",
-    "tests_run": 69,
+    "tests_run": 76,
     "failures": 0
   },
   "todos": [
@@ -381,6 +381,85 @@
         "The public API contract remains explicit and aligned with the shipped implementation."
       ],
       "status": "done"
+    },
+    {
+      "id": "TODO-023",
+      "priority": "P1",
+      "title": "Add optimistic concurrency control for media updates",
+      "details": "Completed 2026-06-19. Prevented lost updates on PUT /media/{mediaId} by adding a JPA/Flyway-backed version column on Media, surfacing version in response DTOs, requiring version on update requests, mapping stale version mismatches and optimistic-locking races to HTTP 409, and expanding repository/controller/service/integration coverage for the conflict contract.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/model/Media.java",
+        "src/main/resources/db/migration/V6__add_media_version.sql",
+        "src/main/java/net/creft/lmm/dto/UpdateMediaRequest.java",
+        "src/main/java/net/creft/lmm/controller/MediaController.java",
+        "src/main/java/net/creft/lmm/service/MediaServiceImpl.java",
+        "src/main/java/net/creft/lmm/exception/GlobalExceptionHandler.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java"
+      ],
+      "acceptance_criteria": [
+        "Media responses expose a server-managed version value.",
+        "PUT /media/{mediaId} requires the latest version and returns HTTP 409 on stale writes.",
+        "Tests cover optimistic-lock persistence behavior and stale-update conflict responses."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-024",
+      "priority": "P1",
+      "title": "Promote MediaFile to a standalone entity with loose media association",
+      "details": "Completed 2026-06-19. Converted MediaFile from an embedded collection-table value object into a standalone JPA entity with its own mediaFileId, timestamps, and version; added MediaFileRepository plus Flyway migration V7__promote_media_file_to_entity.sql; switched Media reads to hydrate ordered files through loose mediaId association rather than explicit child persistence; and added regression coverage proving an existing file can be re-associated to a different media item while belonging to at most one media item at a time.",
+      "key_files": [
+        "src/main/java/net/creft/lmm/model/Media.java",
+        "src/main/java/net/creft/lmm/model/MediaFile.java",
+        "src/main/java/net/creft/lmm/repository/MediaFileRepository.java",
+        "src/main/resources/db/migration/V7__promote_media_file_to_entity.sql",
+        "src/main/java/net/creft/lmm/service/MediaServiceImpl.java",
+        "src/test/java/net/creft/lmm/integration/MediaIntegrationTest.java",
+        "README.md",
+        "docs/media-domain-spec.md"
+      ],
+      "acceptance_criteria": [
+        "MediaFile persists independently with its own public ID, timestamps, and version.",
+        "Media no longer models file persistence as an embedded child collection and instead hydrates files by loose mediaId association.",
+        "An existing file can belong to at most one media item at a time and can be re-associated through the current media API."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-025",
+      "priority": "P1",
+      "title": "Scaffold maintainable client libraries for the current media API",
+      "details": "Completed 2026-06-19. Added a shared client-contract snapshot plus first-pass Java, React-friendly JavaScript, and Python libraries for the current /media endpoints. The new clients directory also documents the update workflow so future endpoint, object, and field additions can be extended consistently across languages.",
+      "key_files": [
+        "clients/spec/media-api-contract.json",
+        "clients/spec/export_openapi.py",
+        "clients/java/",
+        "clients/javascript/",
+        "clients/python/",
+        "README.md"
+      ],
+      "acceptance_criteria": [
+        "Java, JavaScript, and Python client scaffolds expose the current /media endpoints.",
+        "Shared model naming and error semantics are documented in a centralized contract snapshot.",
+        "Future maintainers and AI agents have a clear update workflow for new endpoints or fields."
+      ],
+      "status": "done"
+    },
+    {
+      "id": "TODO-026",
+      "priority": "P2",
+      "title": "Add client release and publishing automation",
+      "details": "Version and publish the new client packages independently, and add CI coverage that verifies each package on client-focused changes.",
+      "key_files": [
+        "clients/",
+        ".github/workflows/"
+      ],
+      "acceptance_criteria": [
+        "Each client package has a documented versioning and release flow.",
+        "CI verifies client-specific tests and packaging steps.",
+        "Publishing metadata is ready for external or internal package registries."
+      ],
+      "status": "pending"
     }
   ]
 }

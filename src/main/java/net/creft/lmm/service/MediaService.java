@@ -12,7 +12,7 @@ public interface MediaService {
 
     Media createMedia(MediaDraft mediaDraft);
 
-    Media updateMedia(String mediaId, MediaDraft mediaDraft);
+    Media updateMedia(String mediaId, Long expectedVersion, MediaDraft mediaDraft);
 
     void deleteMedia(String mediaId);
 }

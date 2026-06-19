@@ -24,6 +24,9 @@ class MediaRepositoryTest {
     @Autowired
     private MediaRepository mediaRepository;
 
+    @Autowired
+    private MediaFileRepository mediaFileRepository;
+
     @Test
     void saveDuplicateMediaIdShouldFail() {
         mediaRepository.saveAndFlush(new Media("media-1", "First title"));
@@ -45,46 +48,53 @@ class MediaRepositoryTest {
     }
 
     @Test
-    void saveMediaWithFiles_PersistsOrderedChildRows() {
-        Media media = new Media(
-                "media-3",
-                "Arrival",
-                List.of(
-                        new MediaFile(
-                                "/srv/media/arrival-1080p.mkv",
-                                "1080p Encode",
-                                "video/x-matroska",
-                                4831838208L,
-                                6960,
-                                false
-                        ),
-                        new MediaFile(
-                                "/srv/media/arrival-4k.mkv",
-                                "4K Remux",
-                                "video/x-matroska",
-                                16831838208L,
-                                6960,
-                                true
-                        )
-                )
+    void saveStandaloneMediaFiles_PersistsOrderedAssociatedRows() {
+        Media savedMedia = mediaRepository.saveAndFlush(new Media("media-3", "Arrival"));
+
+        MediaFile firstFile = new MediaFile(
+                "/srv/media/arrival-1080p.mkv",
+                "1080p Encode",
+                "video/x-matroska",
+                4831838208L,
+                6960,
+                false
         );
+        firstFile.setMediaId(savedMedia.getMediaId());
+        firstFile.setFileOrder(0);
 
-        Media saved = mediaRepository.saveAndFlush(media);
+        MediaFile secondFile = new MediaFile(
+                "/srv/media/arrival-4k.mkv",
+                "4K Remux",
+                "video/x-matroska",
+                16831838208L,
+                6960,
+                true
+        );
+        secondFile.setMediaId(savedMedia.getMediaId());
+        secondFile.setFileOrder(1);
 
-        assertEquals(MediaType.OTHER, saved.getMediaType());
-        assertEquals(MediaStatus.ACTIVE, saved.getStatus());
-        assertEquals(2, saved.getMediaFiles().size());
-        assertEquals("/srv/media/arrival-1080p.mkv", saved.getMediaFiles().get(0).getLocation());
-        assertEquals("/srv/media/arrival-4k.mkv", saved.getMediaFiles().get(1).getLocation());
-        assertEquals("1080p Encode", saved.getMediaFiles().get(0).getLabel());
-        assertEquals("video/x-matroska", saved.getMediaFiles().get(0).getMimeType());
-        assertEquals(4831838208L, saved.getMediaFiles().get(0).getSizeBytes());
-        assertEquals(6960, saved.getMediaFiles().get(0).getDurationSeconds());
-        assertEquals(false, saved.getMediaFiles().get(0).isPrimaryFile());
-        assertEquals("4K Remux", saved.getMediaFiles().get(1).getLabel());
-        assertEquals(true, saved.getMediaFiles().get(1).isPrimaryFile());
-        assertNotNull(saved.getCreatedAt());
-        assertNotNull(saved.getUpdatedAt());
+        mediaFileRepository.saveAll(List.of(firstFile, secondFile));
+        mediaFileRepository.flush();
+
+        List<MediaFile> savedFiles = mediaFileRepository.findAllByMediaIdOrderByFileOrderAscIdAsc(savedMedia.getMediaId());
+
+        assertEquals(MediaType.OTHER, savedMedia.getMediaType());
+        assertEquals(MediaStatus.ACTIVE, savedMedia.getStatus());
+        assertEquals(0L, savedMedia.getVersion());
+        assertEquals(2, savedFiles.size());
+        assertEquals("/srv/media/arrival-1080p.mkv", savedFiles.get(0).getLocation());
+        assertEquals("/srv/media/arrival-4k.mkv", savedFiles.get(1).getLocation());
+        assertEquals("1080p Encode", savedFiles.get(0).getLabel());
+        assertEquals("video/x-matroska", savedFiles.get(0).getMimeType());
+        assertEquals(4831838208L, savedFiles.get(0).getSizeBytes());
+        assertEquals(6960, savedFiles.get(0).getDurationSeconds());
+        assertEquals(false, savedFiles.get(0).isPrimaryFile());
+        assertNotNull(savedFiles.get(0).getMediaFileId());
+        assertNotNull(savedFiles.get(0).getCreatedAt());
+        assertNotNull(savedFiles.get(0).getUpdatedAt());
+        assertEquals(0L, savedFiles.get(0).getVersion());
+        assertEquals("4K Remux", savedFiles.get(1).getLabel());
+        assertEquals(true, savedFiles.get(1).isPrimaryFile());
     }
 
     @Test
@@ -111,7 +121,20 @@ class MediaRepositoryTest {
         assertEquals(LocalDate.parse("2016-11-11"), saved.getReleaseDate());
         assertEquals(116, saved.getRuntimeMinutes());
         assertEquals("en", saved.getLanguage());
+        assertEquals(0L, saved.getVersion());
         assertNotNull(saved.getCreatedAt());
         assertNotNull(saved.getUpdatedAt());
+    }
+
+    @Test
+    void updateMedia_IncrementsVersion() {
+        Media media = mediaRepository.saveAndFlush(new Media("media-5", "Arrival"));
+
+        assertEquals(0L, media.getVersion());
+
+        media.setTitle("Arrival (Updated)");
+        Media updated = mediaRepository.saveAndFlush(media);
+
+        assertEquals(1L, updated.getVersion());
     }
 }

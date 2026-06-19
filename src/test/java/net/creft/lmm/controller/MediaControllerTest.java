@@ -6,6 +6,7 @@ import net.creft.lmm.dto.MediaFileRequest;
 import net.creft.lmm.dto.UpdateMediaRequest;
 import net.creft.lmm.exception.GlobalExceptionHandler;
 import net.creft.lmm.exception.MediaNotFoundException;
+import net.creft.lmm.exception.MediaVersionConflictException;
 import net.creft.lmm.model.Media;
 import net.creft.lmm.model.MediaFile;
 import net.creft.lmm.model.MediaStatus;
@@ -50,6 +51,8 @@ public class MediaControllerTest {
     private static final LocalDate RELEASE_DATE = LocalDate.parse("2016-11-11");
     private static final Instant CREATED_AT = Instant.parse("2026-04-04T18:12:00Z");
     private static final Instant UPDATED_AT = Instant.parse("2026-04-04T18:12:30Z");
+    private static final long VERSION = 3L;
+    private static final long UPDATED_VERSION = 4L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -104,6 +107,7 @@ public class MediaControllerTest {
                 .andExpect(jsonPath("$.items[0].mediaType").value("MOVIE"))
                 .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.items[0].language").value("en"))
+                .andExpect(jsonPath("$.items[0].version").value(VERSION))
                 .andExpect(jsonPath("$.items[0].createdAt").value(CREATED_AT.toString()))
                 .andExpect(jsonPath("$.items[0].mediaFiles[0].location").value("/srv/media/first.mkv"))
                 .andExpect(jsonPath("$.items[1].mediaId").value("media-2"))
@@ -225,6 +229,7 @@ public class MediaControllerTest {
                 .andExpect(jsonPath("$.releaseDate").value(RELEASE_DATE.toString()))
                 .andExpect(jsonPath("$.runtimeMinutes").value(116))
                 .andExpect(jsonPath("$.language").value("en"))
+                .andExpect(jsonPath("$.version").value(VERSION))
                 .andExpect(jsonPath("$.createdAt").value(CREATED_AT.toString()))
                 .andExpect(jsonPath("$.updatedAt").value(UPDATED_AT.toString()))
                 .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/test.mkv"));
@@ -334,6 +339,7 @@ public class MediaControllerTest {
                 .andExpect(jsonPath("$.releaseDate").value(RELEASE_DATE.toString()))
                 .andExpect(jsonPath("$.runtimeMinutes").value(116))
                 .andExpect(jsonPath("$.language").value("en"))
+                .andExpect(jsonPath("$.version").value(VERSION))
                 .andExpect(jsonPath("$.createdAt").value(CREATED_AT.toString()))
                 .andExpect(jsonPath("$.updatedAt").value(UPDATED_AT.toString()))
                 .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/new-title.mkv"))
@@ -521,6 +527,7 @@ public class MediaControllerTest {
         String mediaId = "12345";
         UpdateMediaRequest updateRequest = new UpdateMediaRequest(
                 "Updated Title",
+                VERSION,
                 "collection-2",
                 "Updated Original",
                 MediaType.MOVIE,
@@ -577,7 +584,8 @@ public class MediaControllerTest {
                 ))
         );
         updatedMedia.setParentId("collection-2");
-        Mockito.when(mediaService.updateMedia(mediaId, expectedDraft)).thenReturn(updatedMedia);
+        updatedMedia.setVersion(UPDATED_VERSION);
+        Mockito.when(mediaService.updateMedia(mediaId, VERSION, expectedDraft)).thenReturn(updatedMedia);
 
         mockMvc.perform(put("/media/{mediaId}", mediaId)
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
@@ -593,6 +601,7 @@ public class MediaControllerTest {
                 .andExpect(jsonPath("$.releaseDate").value("2017-01-01"))
                 .andExpect(jsonPath("$.runtimeMinutes").value(117))
                 .andExpect(jsonPath("$.language").value("en-US"))
+                .andExpect(jsonPath("$.version").value(UPDATED_VERSION))
                 .andExpect(jsonPath("$.mediaFiles[0].location").value("/srv/media/updated-title.mkv"))
                 .andExpect(jsonPath("$.mediaFiles[0].label").value("Director Commentary"))
                 .andExpect(jsonPath("$.mediaFiles[0].mimeType").value("video/x-matroska"))
@@ -604,7 +613,7 @@ public class MediaControllerTest {
     @Test
     public void testUpdateMedia_WhenTitleBlank_ReturnsValidationError() throws Exception {
         String mediaId = "12345";
-        UpdateMediaRequest updateRequest = new UpdateMediaRequest(" ", MediaType.MOVIE);
+        UpdateMediaRequest updateRequest = new UpdateMediaRequest(" ", VERSION, MediaType.MOVIE);
 
         mockMvc.perform(put("/media/{mediaId}", mediaId)
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
@@ -622,7 +631,7 @@ public class MediaControllerTest {
     public void testUpdateMedia_WhenMediaTypeMissing_ReturnsValidationError() throws Exception {
         mockMvc.perform(put("/media/{mediaId}", "12345")
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"Updated Title\"}"))
+                        .content("{\"title\":\"Updated Title\",\"version\":3}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.error").value("Validation failed"))
@@ -639,6 +648,7 @@ public class MediaControllerTest {
                         .content("""
                                 {
                                   "title": "Updated Title",
+                                  "version": 3,
                                   "mediaType": "MOVIE",
                                   "status": "NOT_A_STATUS"
                                 }
@@ -655,9 +665,10 @@ public class MediaControllerTest {
     @Test
     public void testUpdateMedia_WhenMediaNotFound() throws Exception {
         String mediaId = "nonexistent-id";
-        UpdateMediaRequest updateRequest = new UpdateMediaRequest("Updated Title", MediaType.MOVIE);
+        UpdateMediaRequest updateRequest = new UpdateMediaRequest("Updated Title", VERSION, MediaType.MOVIE);
         Mockito.when(mediaService.updateMedia(
                         mediaId,
+                        VERSION,
                         new MediaDraft("Updated Title", null, MediaType.MOVIE, null, null, null, null, null, null, List.of())
                 ))
                 .thenThrow(new MediaNotFoundException(mediaId));
@@ -677,6 +688,7 @@ public class MediaControllerTest {
     public void testUpdateMedia_WhenMediaFileLocationBlank_ReturnsValidationError() throws Exception {
         UpdateMediaRequest updateRequest = new UpdateMediaRequest(
                 "Updated Title",
+                VERSION,
                 MediaType.MOVIE,
                 List.of(new MediaFileRequest(" "))
         );
@@ -691,6 +703,48 @@ public class MediaControllerTest {
                 .andExpect(jsonPath("$['fieldErrors']['mediaFiles[0].location']").value("mediaFiles[].location is required"));
 
         Mockito.verifyNoInteractions(mediaService);
+    }
+
+    @Test
+    public void testUpdateMedia_WhenVersionMissing_ReturnsValidationError() throws Exception {
+        mockMvc.perform(put("/media/{mediaId}", "12345")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Updated Title",
+                                  "mediaType": "MOVIE"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.version").value("version is required"));
+
+        Mockito.verifyNoInteractions(mediaService);
+    }
+
+    @Test
+    public void testUpdateMedia_WhenVersionConflict_ReturnsConflict() throws Exception {
+        String mediaId = "12345";
+        UpdateMediaRequest updateRequest = new UpdateMediaRequest("Updated Title", VERSION, MediaType.MOVIE);
+        Mockito.when(mediaService.updateMedia(
+                        mediaId,
+                        VERSION,
+                        new MediaDraft("Updated Title", null, MediaType.MOVIE, null, null, null, null, null, null, List.of())
+                ))
+                .thenThrow(new MediaVersionConflictException(mediaId, VERSION, UPDATED_VERSION));
+
+        mockMvc.perform(put("/media/{mediaId}", mediaId)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message")
+                        .value("Media with id '12345' has version 4 but the request expected version 3"))
+                .andExpect(jsonPath("$.fieldErrors.version")
+                        .value("version does not match the current media state"));
     }
 
     @Test
@@ -798,6 +852,7 @@ public class MediaControllerTest {
         media.setLanguage(language);
         media.setCreatedAt(CREATED_AT);
         media.setUpdatedAt(UPDATED_AT);
+        media.setVersion(VERSION);
         return media;
     }
 }

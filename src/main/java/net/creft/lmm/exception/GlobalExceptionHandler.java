@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -21,6 +22,9 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String VERSION_CONFLICT_FIELD_MESSAGE = "version does not match the current media state";
+    private static final String MEDIA_FILE_VERSION_CONFLICT_FIELD_MESSAGE =
+            "version does not match the current media file state";
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidationFailure(MethodArgumentNotValidException exception) {
@@ -68,10 +72,41 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.NOT_FOUND, "Not Found", exception.getMessage(), Map.of());
     }
 
+    @ExceptionHandler(MediaVersionConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleMediaVersionConflict(MediaVersionConflictException exception) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "Conflict",
+                exception.getMessage(),
+                Map.of("version", VERSION_CONFLICT_FIELD_MESSAGE)
+        );
+    }
+
+    @ExceptionHandler(MediaFileVersionConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleMediaFileVersionConflict(MediaFileVersionConflictException exception) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "Conflict",
+                exception.getMessage(),
+                Map.of("mediaFiles", MEDIA_FILE_VERSION_CONFLICT_FIELD_MESSAGE)
+        );
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
         logger.info("Data integrity violation: {}", exception.getMostSpecificCause().getMessage());
         return buildResponse(HttpStatus.CONFLICT, "Conflict", "Request conflicts with existing data", Map.of());
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLockingFailure(OptimisticLockingFailureException exception) {
+        logger.info("Optimistic locking failure: {}", exception.getMessage());
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "Conflict",
+                "Media was modified by another request; fetch the latest version and retry",
+                Map.of("version", VERSION_CONFLICT_FIELD_MESSAGE)
+        );
     }
 
     @ExceptionHandler(Exception.class)

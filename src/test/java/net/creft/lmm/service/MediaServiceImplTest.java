@@ -2,10 +2,12 @@ package net.creft.lmm.service;
 
 import net.creft.lmm.exception.InvalidRequestParameterException;
 import net.creft.lmm.exception.MediaNotFoundException;
+import net.creft.lmm.exception.MediaVersionConflictException;
 import net.creft.lmm.model.Media;
 import net.creft.lmm.model.MediaFile;
 import net.creft.lmm.model.MediaStatus;
 import net.creft.lmm.model.MediaType;
+import net.creft.lmm.repository.MediaFileRepository;
 import net.creft.lmm.repository.MediaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,9 +37,13 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MediaServiceImplTest {
     private static final LocalDate RELEASE_DATE = LocalDate.parse("2016-11-11");
+    private static final long CURRENT_VERSION = 3L;
 
     @Mock
     private MediaRepository mediaRepository;
+
+    @Mock
+    private MediaFileRepository mediaFileRepository;
 
     @InjectMocks
     private MediaServiceImpl mediaService;
@@ -48,6 +54,8 @@ class MediaServiceImplTest {
         Page<Media> page = new PageImpl<>(List.of(new Media("media-1", "Title")), pageable, 1);
         when(mediaRepository.findAll(org.mockito.Mockito.<Specification<Media>>any(), org.mockito.Mockito.eq(pageable)))
                 .thenReturn(page);
+        when(mediaFileRepository.findAllByMediaIdInOrderByMediaIdAscFileOrderAscIdAsc(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(List.of());
 
         Page<Media> result = mediaService.listMedia(
                 new MediaSearchCriteria(null, null, null, null, null, null, null),
@@ -64,6 +72,8 @@ class MediaServiceImplTest {
         Page<Media> page = new PageImpl<>(List.of(new Media("media-1", "Title")), pageable, 1);
         when(mediaRepository.findAll(org.mockito.Mockito.<Specification<Media>>any(), org.mockito.Mockito.eq(pageable)))
                 .thenReturn(page);
+        when(mediaFileRepository.findAllByMediaIdInOrderByMediaIdAscFileOrderAscIdAsc(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(List.of());
 
         Page<Media> result = mediaService.listMedia(
                 new MediaSearchCriteria("   ", "   ", null, null, "   ", null, null),
@@ -80,6 +90,8 @@ class MediaServiceImplTest {
         Page<Media> page = new PageImpl<>(List.of(new Media("media-1", "Filtered Title")), pageable, 1);
         when(mediaRepository.findAll(org.mockito.Mockito.<Specification<Media>>any(), org.mockito.Mockito.eq(pageable)))
                 .thenReturn(page);
+        when(mediaFileRepository.findAllByMediaIdInOrderByMediaIdAscFileOrderAscIdAsc(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(List.of());
 
         Page<Media> result = mediaService.listMedia(
                 new MediaSearchCriteria(
@@ -102,6 +114,7 @@ class MediaServiceImplTest {
     void getMedia_WhenMediaExists_ReturnsMedia() {
         Media media = new Media("media-1", "Title");
         when(mediaRepository.findByMediaId("media-1")).thenReturn(media);
+        when(mediaFileRepository.findAllByMediaIdOrderByFileOrderAscIdAsc("media-1")).thenReturn(List.of());
 
         Media result = mediaService.getMedia("media-1");
 
@@ -121,6 +134,8 @@ class MediaServiceImplTest {
         ArgumentCaptor<Media> captor = ArgumentCaptor.forClass(Media.class);
         when(mediaRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
         when(mediaRepository.findByMediaId("collection-1")).thenReturn(new Media("collection-1", "Collection"));
+        when(mediaFileRepository.findAllByMediaIdOrderByFileOrderAscIdAsc(org.mockito.ArgumentMatchers.anyString())).thenReturn(List.of());
+        when(mediaFileRepository.saveAll(org.mockito.ArgumentMatchers.anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         Media result = mediaService.createMedia(new MediaDraft(
                 "  New Title  ",
@@ -168,11 +183,14 @@ class MediaServiceImplTest {
         Media existing = new Media("media-1", "Old", List.of(new MediaFile("/srv/media/old.mkv")));
         existing.setMediaType(MediaType.MOVIE);
         existing.setStatus(MediaStatus.ACTIVE);
+        existing.setVersion(CURRENT_VERSION);
         when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
         when(mediaRepository.findByMediaId("collection-2")).thenReturn(new Media("collection-2", "Collection"));
         when(mediaRepository.save(existing)).thenReturn(existing);
+        when(mediaFileRepository.findAllByMediaIdOrderByFileOrderAscIdAsc("media-1")).thenReturn(List.of());
+        when(mediaFileRepository.saveAll(org.mockito.ArgumentMatchers.anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Media updated = mediaService.updateMedia("media-1", new MediaDraft(
+        Media updated = mediaService.updateMedia("media-1", CURRENT_VERSION, new MediaDraft(
                 "  Updated  ",
                 "  Updated Original  ",
                 MediaType.SERIES,
@@ -217,10 +235,13 @@ class MediaServiceImplTest {
         Media existing = new Media("media-1", "Old", List.of(new MediaFile("/srv/media/old.mkv")));
         existing.setMediaType(MediaType.MOVIE);
         existing.setStatus(MediaStatus.ARCHIVED);
+        existing.setVersion(CURRENT_VERSION);
         when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
         when(mediaRepository.save(existing)).thenReturn(existing);
+        when(mediaFileRepository.findAllByMediaIdOrderByFileOrderAscIdAsc("media-1")).thenReturn(List.of());
+        when(mediaFileRepository.saveAll(org.mockito.ArgumentMatchers.anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Media updated = mediaService.updateMedia("media-1", new MediaDraft(
+        Media updated = mediaService.updateMedia("media-1", CURRENT_VERSION, new MediaDraft(
                 "  Updated  ",
                 "   ",
                 MediaType.MOVIE,
@@ -259,7 +280,23 @@ class MediaServiceImplTest {
     void updateMedia_WhenMediaDoesNotExist_ThrowsNotFound() {
         when(mediaRepository.findByMediaId("missing")).thenReturn(null);
 
-        assertThrows(MediaNotFoundException.class, () -> mediaService.updateMedia("missing", minimalDraft("Updated")));
+        assertThrows(MediaNotFoundException.class, () -> mediaService.updateMedia("missing", CURRENT_VERSION, minimalDraft("Updated")));
+        verify(mediaRepository, never()).save(org.mockito.ArgumentMatchers.any(Media.class));
+    }
+
+    @Test
+    void updateMedia_WhenVersionDoesNotMatch_ThrowsConflict() {
+        Media existing = new Media("media-1", "Old");
+        existing.setMediaType(MediaType.MOVIE);
+        existing.setVersion(CURRENT_VERSION);
+        when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
+
+        MediaVersionConflictException exception = assertThrows(
+                MediaVersionConflictException.class,
+                () -> mediaService.updateMedia("media-1", CURRENT_VERSION - 1, minimalDraft("Updated"))
+        );
+
+        assertEquals("Media with id 'media-1' has version 3 but the request expected version 2", exception.getMessage());
         verify(mediaRepository, never()).save(org.mockito.ArgumentMatchers.any(Media.class));
     }
 
@@ -267,6 +304,7 @@ class MediaServiceImplTest {
     void deleteMedia_WhenMediaExists_DeletesMedia() {
         Media existing = new Media("media-1", "Title");
         when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
+        when(mediaFileRepository.findAllByMediaIdOrderByFileOrderAscIdAsc("media-1")).thenReturn(List.of());
         doNothing().when(mediaRepository).delete(existing);
 
         mediaService.deleteMedia("media-1");
@@ -286,6 +324,7 @@ class MediaServiceImplTest {
     void createMedia_NormalizesOptionalStringsToNull() {
         ArgumentCaptor<Media> captor = ArgumentCaptor.forClass(Media.class);
         when(mediaRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mediaFileRepository.saveAll(org.mockito.ArgumentMatchers.anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         Media result = mediaService.createMedia(new MediaDraft(
                 "New Title",
@@ -343,11 +382,12 @@ class MediaServiceImplTest {
     void updateMedia_WhenParentIdReferencesSelf_ThrowsValidationError() {
         Media existing = new Media("media-1", "Old");
         existing.setMediaType(MediaType.MOVIE);
+        existing.setVersion(CURRENT_VERSION);
         when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
 
         InvalidRequestParameterException exception = assertThrows(
                 InvalidRequestParameterException.class,
-                () -> mediaService.updateMedia("media-1", new MediaDraft(
+                () -> mediaService.updateMedia("media-1", CURRENT_VERSION, new MediaDraft(
                         "Updated",
                         null,
                         MediaType.MOVIE,
@@ -369,6 +409,7 @@ class MediaServiceImplTest {
     void updateMedia_WhenParentIdCreatesCycle_ThrowsValidationError() {
         Media existing = new Media("media-1", "Old");
         existing.setMediaType(MediaType.MOVIE);
+        existing.setVersion(CURRENT_VERSION);
         Media parent = new Media("collection-1", "Collection");
         parent.setParentId("media-1");
         when(mediaRepository.findByMediaId("media-1")).thenReturn(existing);
@@ -376,7 +417,7 @@ class MediaServiceImplTest {
 
         InvalidRequestParameterException exception = assertThrows(
                 InvalidRequestParameterException.class,
-                () -> mediaService.updateMedia("media-1", new MediaDraft(
+                () -> mediaService.updateMedia("media-1", CURRENT_VERSION, new MediaDraft(
                         "Updated",
                         null,
                         MediaType.MOVIE,

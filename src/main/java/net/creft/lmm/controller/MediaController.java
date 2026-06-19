@@ -152,7 +152,11 @@ public class MediaController {
     })
     public ResponseEntity<MediaResponse> updateMedia(@PathVariable String mediaId,
                                                      @Valid @RequestBody UpdateMediaRequest updateRequest) {
-        return ResponseEntity.ok(MediaResponse.from(mediaService.updateMedia(mediaId, toMediaDraft(updateRequest))));
+        return ResponseEntity.ok(MediaResponse.from(mediaService.updateMedia(
+                mediaId,
+                updateRequest.getVersion(),
+                toMediaDraft(updateRequest)
+        )));
     }
 
     @DeleteMapping("/media/{mediaId}")
@@ -196,9 +200,12 @@ public class MediaController {
         if (mediaFiles == null) {
             return List.of();
         }
+        validateMediaFileReferenceInputs(mediaFiles);
         validatePrimaryFileSelection(mediaFiles);
         return mediaFiles.stream()
                 .map(mediaFile -> new MediaFileDraft(
+                        mediaFile.getMediaFileId(),
+                        mediaFile.getVersion(),
                         mediaFile.getLocation(),
                         mediaFile.getLabel(),
                         mediaFile.getMimeType(),
@@ -207,6 +214,26 @@ public class MediaController {
                         mediaFile.isPrimaryFile()
                 ))
                 .toList();
+    }
+
+    private void validateMediaFileReferenceInputs(List<MediaFileRequest> mediaFiles) {
+        for (int index = 0; index < mediaFiles.size(); index++) {
+            MediaFileRequest mediaFile = mediaFiles.get(index);
+            String mediaFileId = mediaFile.getMediaFileId();
+            Long version = mediaFile.getVersion();
+            if (mediaFileId != null && !mediaFileId.isBlank() && version == null) {
+                throw new InvalidRequestParameterException(
+                        "mediaFiles[" + index + "].version",
+                        "mediaFiles[" + index + "].version is required when mediaFileId is provided"
+                );
+            }
+            if ((mediaFileId == null || mediaFileId.isBlank()) && version != null) {
+                throw new InvalidRequestParameterException(
+                        "mediaFiles[" + index + "].mediaFileId",
+                        "mediaFiles[" + index + "].mediaFileId is required when version is provided"
+                );
+            }
+        }
     }
 
     private void validatePrimaryFileSelection(List<MediaFileRequest> mediaFiles) {

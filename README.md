@@ -67,6 +67,8 @@ docker compose up --build
 
 Generated OpenAPI JSON is available locally at `/v3/api-docs`.
 
+Client-library scaffolding for the current `/media` endpoints now lives under [clients/](/home/isamudaison/Code/libre-media-manager/clients/README.md), including Java, React-friendly JavaScript, and Python packages plus a shared machine-readable contract snapshot for maintainers and AI agents.
+
 Operational endpoints are exposed under `/actuator`:
 
 - `/actuator/health`
@@ -77,8 +79,9 @@ Clients can supply an `X-Request-Id` header on any request. If present, the app 
 `mediaType` is required on create and update. `status` defaults to `ACTIVE` when omitted.
 Supported media types are `MOVIE`, `EPISODE`, `SERIES`, `COLLECTION`, `BOOK`, `AUDIOBOOK`, `ALBUM`, `PODCAST`, `GAME`, and `OTHER`.
 `parentId` is optional and can be used to attach a media item to another media record such as a collection. When provided, it must reference an existing `mediaId`, cannot point to the item itself, and cannot create a cycle. Deleting a parent clears `parentId` on its children.
-`mediaFiles` are stored in request order. At most one entry may set `primaryFile` to `true`.
-`createdAt` and `updatedAt` are server-managed response fields.
+`mediaFiles` are stored in request order. Each file is a standalone entity with its own `mediaFileId`, `version`, `createdAt`, and `updatedAt`, and a file can be associated with at most one media item at a time. At most one entry may set `primaryFile` to `true`.
+`createdAt`, `updatedAt`, and `version` are server-managed response fields.
+`PUT /media/<mediaId>` requires the latest `version` from a prior read or create response. If the submitted version is stale, the API returns `409 Conflict` so clients can fetch the latest record and retry. When a `mediaFiles` entry references an existing file, it must also include that file's current `mediaFileId` and `version`.
 
 ### Create a collection
 
@@ -158,6 +161,7 @@ curl -X PUT http://localhost:8080/media/<mediaId> \
   -H 'Content-Type: application/json' \
   -d '{
     "title":"Arrival (Updated)",
+    "version":0,
     "parentId":"<collectionMediaId>",
     "mediaType":"MOVIE",
     "status":"ARCHIVED",
@@ -187,6 +191,8 @@ curl -X PUT http://localhost:8080/media/<mediaId> \
   }'
 ```
 
+`mediaFiles` entries without `mediaFileId` create new standalone files. To re-associate or edit an existing file through `PUT /media/<mediaId>`, include both `mediaFileId` and `version` from a prior response. Re-associating a file moves it off any previous media item.
+
 ### Delete media
 
 ```bash
@@ -207,6 +213,7 @@ Single media responses:
 {
   "mediaId": "generated-id",
   "parentId": "collection-media-id",
+  "version": 0,
   "title": "Arrival",
   "originalTitle": "Story of Your Life",
   "mediaType": "MOVIE",
@@ -219,6 +226,10 @@ Single media responses:
   "updatedAt": "2026-04-05T16:40:00Z",
   "mediaFiles": [
     {
+      "mediaFileId": "generated-file-id",
+      "version": 0,
+      "createdAt": "2026-06-19T18:12:00Z",
+      "updatedAt": "2026-06-19T18:12:00Z",
       "location": "/srv/media/arrival.mkv",
       "label": "Main Feature",
       "mimeType": "video/x-matroska",
@@ -238,6 +249,7 @@ Paginated list responses:
     {
       "mediaId": "generated-id",
       "parentId": "collection-media-id",
+      "version": 0,
       "title": "Arrival",
       "originalTitle": "Story of Your Life",
       "mediaType": "MOVIE",
@@ -250,6 +262,10 @@ Paginated list responses:
       "updatedAt": "2026-04-05T16:40:00Z",
       "mediaFiles": [
         {
+          "mediaFileId": "generated-file-id",
+          "version": 0,
+          "createdAt": "2026-06-19T18:12:00Z",
+          "updatedAt": "2026-06-19T18:12:00Z",
           "location": "/srv/media/arrival.mkv",
           "label": "Main Feature",
           "mimeType": "video/x-matroska",
@@ -271,3 +287,13 @@ Validation and not-found failures use a stable JSON error contract with `error`,
 Relationship validation failures such as unknown `parentId`, self-parenting, and cycles also use that same `400` envelope.
 
 Persistence conflicts are returned as HTTP `409 Conflict` with the same response envelope.
+
+## Clients
+
+The initial client libraries are intentionally thin and easy to evolve:
+
+- [clients/java](/home/isamudaison/Code/libre-media-manager/clients/java/README.md)
+- [clients/javascript](/home/isamudaison/Code/libre-media-manager/clients/javascript/README.md)
+- [clients/python](/home/isamudaison/Code/libre-media-manager/clients/python/README.md)
+
+The shared contract and update workflow live in [clients/spec](/home/isamudaison/Code/libre-media-manager/clients/spec/README.md).

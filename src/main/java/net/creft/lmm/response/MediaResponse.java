@@ -17,6 +17,9 @@ public class MediaResponse {
     @Schema(description = "Optional parent media identifier for lightweight collection grouping", example = "b8a79f6d-9317-4d16-8c77-49b1a6f7ec28")
     private final String parentId;
 
+    @Schema(description = "Server-managed optimistic-lock version", example = "0")
+    private final Long version;
+
     @Schema(description = "Human-readable media title", example = "Arrival")
     private final String title;
 
@@ -53,6 +56,7 @@ public class MediaResponse {
     public MediaResponse(
             String mediaId,
             String parentId,
+            Long version,
             String title,
             String originalTitle,
             MediaType mediaType,
@@ -67,6 +71,7 @@ public class MediaResponse {
     ) {
         this.mediaId = mediaId;
         this.parentId = parentId;
+        this.version = version;
         this.title = title;
         this.originalTitle = originalTitle;
         this.mediaType = mediaType;
@@ -87,6 +92,7 @@ public class MediaResponse {
         return new MediaResponse(
                 media.getMediaId(),
                 media.getParentId(),
+                media.getVersion(),
                 media.getTitle(),
                 media.getOriginalTitle(),
                 media.getMediaType(),
@@ -107,6 +113,10 @@ public class MediaResponse {
 
     public String getParentId() {
         return parentId;
+    }
+
+    public Long getVersion() {
+        return version;
     }
 
     public String getTitle() {

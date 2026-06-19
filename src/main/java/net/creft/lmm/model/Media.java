@@ -1,19 +1,16 @@
 package net.creft.lmm.model;
 
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -65,9 +62,11 @@ public class Media {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "media_file", joinColumns = @JoinColumn(name = "media_id", referencedColumnName = "id"))
-    @OrderColumn(name = "file_order")
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
+    @Transient
     private List<MediaFile> mediaFiles = new ArrayList<>();
 
     public Media() {
@@ -187,6 +186,14 @@ public class Media {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     public List<MediaFile> getMediaFiles() {

@@ -3,9 +3,18 @@ package net.creft.lmm.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 public class MediaFileRequest {
+    @Schema(description = "Optional existing media file identifier when associating or updating a standalone file", example = "6f27d761-3c7f-4a1c-b0ea-9a0d7b77cb17")
+    @Size(max = 36, message = "mediaFiles[].mediaFileId must be at most 36 characters")
+    private String mediaFileId;
+
+    @Schema(description = "Optional optimistic-lock version for an existing media file", example = "0")
+    @PositiveOrZero(message = "mediaFiles[].version must be greater than or equal to 0")
+    private Long version;
+
     @Schema(description = "Local or network-accessible file location", example = "/srv/media/arrival.mkv")
     @NotBlank(message = "mediaFiles[].location is required")
     @Size(max = 2048, message = "mediaFiles[].location must be at most 2048 characters")
@@ -51,6 +60,22 @@ public class MediaFileRequest {
         this.sizeBytes = sizeBytes;
         this.durationSeconds = durationSeconds;
         this.primaryFile = primaryFile;
+    }
+
+    public String getMediaFileId() {
+        return mediaFileId;
+    }
+
+    public void setMediaFileId(String mediaFileId) {
+        this.mediaFileId = mediaFileId;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     public String getLocation() {

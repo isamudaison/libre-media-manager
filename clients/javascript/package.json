@@ -1,0 +1,14 @@
+{
+  "name": "@libre-media-manager/client-react",
+  "version": "0.1.0",
+  "description": "Fetch-based JavaScript client and React hooks for Libre Media Manager",
+  "type": "module",
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./react": "./src/react.js"
+  }
+}

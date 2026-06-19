@@ -1,7 +1,7 @@
 # Media Domain Model Specification
 
 Status: Current implementation-aligned draft
-Last updated: 2026-04-05
+Last updated: 2026-06-19
 
 Parent spec: [project-spec.md](/home/isamudaison/Code/libre-media-manager/docs/project-spec.md)
 Related spec: [taxonomy-spec.md](/home/isamudaison/Code/libre-media-manager/docs/taxonomy-spec.md)
@@ -27,15 +27,23 @@ The implementation now stores:
 - `language`
 - `createdAt`
 - `updatedAt`
+- `version`
 
-It also supports an ordered `MediaFile` child collection with:
+It also supports standalone `MediaFile` records that can be loosely associated back to a `Media`
+record with:
 
+- `mediaFileId`
+- `mediaId`
+- `fileOrder`
 - `location`
 - `label`
 - `mimeType`
 - `sizeBytes`
 - `durationSeconds`
 - `primaryFile`
+- `createdAt`
+- `updatedAt`
+- `version`
 
 That gives the API a credible metadata-plus-playback baseline while leaving deeper asset and
 taxonomy modeling for later phases.
@@ -48,6 +56,7 @@ The current Phase 1 scope is:
 - support richer descriptive metadata
 - support lifecycle state
 - support lightweight parent-child grouping through `parentId`
+- support standalone playback-file records with loose media association
 - support filtering and sorting by key metadata fields
 - keep hierarchy semantics intentionally shallow for now
 
@@ -64,9 +73,10 @@ Those are valid future concerns, but they should not be forced into the first se
 
 ## Core Design Decision
 
-The current `Media` entity should remain the primary aggregate, but its meaning should be clarified:
+The current `Media` entity should remain the primary catalog record, but its meaning should be clarified:
 
 - `Media` = one catalog entry representing a media work or collection-level item
+- `MediaFile` = one standalone playback-oriented resource that may be associated with at most one `Media` at a time
 
 Examples:
 
@@ -80,7 +90,8 @@ Examples:
 - one podcast
 - one game
 
-This keeps the model simple enough to implement cleanly while giving it real business value.
+This keeps the model simple enough to implement cleanly while leaving room for future endpoints
+that manage files and media independently.
 
 ## Current Aggregate
 
@@ -94,6 +105,7 @@ Required fields:
 - `status`: required enum
 - `createdAt`: server-managed timestamp
 - `updatedAt`: server-managed timestamp
+- `version`: server-managed optimistic-lock token
 
 Optional fields:
 
@@ -103,6 +115,26 @@ Optional fields:
 - `releaseDate`: canonical release date
 - `runtimeMinutes`: duration in minutes for time-based media
 - `language`: primary language code
+
+### `MediaFile`
+
+Required fields:
+
+- `mediaFileId`: immutable public identifier, UUID string
+- `location`: file or URI location
+- `primaryFile`: preferred playback flag
+- `createdAt`: server-managed timestamp
+- `updatedAt`: server-managed timestamp
+- `version`: server-managed optimistic-lock token
+
+Optional fields:
+
+- `mediaId`: nullable associated `Media.mediaId`
+- `fileOrder`: request-order position within the associated media view
+- `label`: human-readable file label
+- `mimeType`: declared MIME type
+- `sizeBytes`: file size
+- `durationSeconds`: runtime for the individual file
 
 ## Current Enums
 
@@ -239,6 +271,15 @@ Rationale:
 - mutable: no from API perspective
 - managed by: server
 
+### `version`
+
+- type: `Long`
+- required: yes
+- mutable: no from API perspective
+- managed by: server
+- usage: clients must send the latest value on `PUT /media/{mediaId}` to avoid lost updates
+- notes: nested `mediaFiles` changes made through `PUT /media/{mediaId}` still require the latest `Media.version`
+
 ## Current Persistence Shape
 
 ### `media` table
@@ -258,6 +299,7 @@ Current columns:
 - `language varchar(16) null`
 - `created_at timestamp with time zone not null`
 - `updated_at timestamp with time zone not null`
+- `version bigint not null`
 
 Current indexes:
 
@@ -275,14 +317,31 @@ Current constraints:
 - `media_type` restricted to enum values at application layer
 - `status` restricted to enum values at application layer
 
-### `media_file` collection table
+### `media_file` table
 
-Current shape:
+Current columns:
 
-- owned by `Media`
-- stored in request order using `file_order`
-- no Java back-reference from `MediaFile` to `Media`
-- at most one entry may set `primaryFile = true`
+- `id bigint primary key`
+- `media_file_id varchar(36) not null unique`
+- `media_id varchar(36) null`
+- `file_order integer null`
+- `location varchar(2048) not null`
+- `label varchar(255) null`
+- `mime_type varchar(255) null`
+- `size_bytes bigint null`
+- `duration_seconds integer null`
+- `primary_file boolean not null`
+- `created_at timestamp with time zone not null`
+- `updated_at timestamp with time zone not null`
+- `version bigint not null`
+
+Current constraints and behavior:
+
+- `media_id` references `media(media_id)` with `on delete set null`
+- rows are returned in `file_order` order within a hydrated media view
+- at most one media item may reference a given file at a time because `media_file` stores a single nullable `media_id`
+- at most one entry may set `primaryFile = true` within a single request payload
+- existing-file edits and re-association require the current `MediaFile.version`
 
 ## Current API Contract
 
@@ -322,6 +381,8 @@ Rules:
 - `parentId` must reference an existing `mediaId` when present
 - `status` optional in request, default `ACTIVE`
 - all optional string fields should accept omission or `null`
+- `mediaFiles` entries without `mediaFileId` create new standalone files
+- `mediaFiles` entries with `mediaFileId` must also include the current file `version`
 
 ## Update Request
 
@@ -334,6 +395,7 @@ Required on update:
 
 - `title`
 - `mediaType`
+- `version`
 
 Optional on update:
 
@@ -345,6 +407,12 @@ Optional on update:
 - `language`
 - `status`
 - `mediaFiles`
+
+Update semantics for `mediaFiles`:
+
+- request order becomes `fileOrder`
+- referencing an existing `mediaFileId` moves that file onto the target media item
+- because a file can belong to at most one media item at a time, re-association removes it from any previous media item
 
 Future option:
 
@@ -358,6 +426,7 @@ Current item response:
 {
   "mediaId": "c1c32f42-8919-4d6c-a0d8-9b4d42d2adbe",
   "parentId": "91b70c8f-4d1b-4c15-bfb1-66b063d6d363",
+  "version": 0,
   "title": "Arrival",
   "originalTitle": null,
   "mediaType": "MOVIE",
@@ -370,6 +439,10 @@ Current item response:
   "updatedAt": "2026-03-29T23:10:00Z",
   "mediaFiles": [
     {
+      "mediaFileId": "6f27d761-3c7f-4a1c-b0ea-9a0d7b77cb17",
+      "version": 0,
+      "createdAt": "2026-06-19T18:12:00Z",
+      "updatedAt": "2026-06-19T18:12:00Z",
       "location": "/srv/media/arrival.mkv",
       "label": "Main Feature",
       "mimeType": "video/x-matroska",
@@ -413,8 +486,11 @@ Current API validation:
 - `summary`: max 4000
 - `runtimeMinutes`: positive integer
 - `language`: max 16 and format-constrained if we decide to enforce BCP 47 strictly
+- `version`: required on update, integer `>= 0`
 - `mediaType`: required enum
 - `status`: enum when provided
+- `mediaFiles[].mediaFileId`: optional, max 36
+- `mediaFiles[].version`: required when `mediaFiles[].mediaFileId` is provided, integer `>= 0`
 
 Current normalization rules:
 
@@ -438,7 +514,9 @@ Implemented migration sequence:
 3. Add `parent_id` as a nullable self-reference to `media(media_id)` with `on delete set null`.
 4. Update entity, DTOs, response models, and tests.
 5. Expand list endpoint filtering and sorting.
-6. Only after the new model is stable, consider deeper hierarchy semantics or external references.
+6. Add optimistic media versioning so stale `PUT` requests fail with `409 Conflict` instead of silently overwriting newer changes.
+7. Promote `media_file` from a collection table to a standalone entity with its own public ID, timestamps, version, and loose nullable `media_id` association back to `media(media_id)`.
+8. Only after the new model is stable, consider deeper hierarchy semantics, standalone file-management endpoints, or external references.
 
 Example migration shape:
 
@@ -488,14 +566,17 @@ Add only when product requirements are explicit:
 
 The current implementation now includes:
 
-1. scalar metadata fields plus `createdAt` and `updatedAt`
+1. scalar media metadata fields plus `createdAt`, `updatedAt`, and `version`
 2. required `mediaType` on create and update
 3. default `status = ACTIVE` when omitted
-4. ordered `mediaFiles` with a single-primary-file rule
-5. optional `parentId` with existence, self-reference, and cycle validation
-6. `ON DELETE SET NULL` parent cleanup behavior
-7. list filtering by `title`, `parentId`, `mediaType`, `status`, `language`, `releasedBefore`, and `releasedAfter`
-8. first-class `COLLECTION` and `EPISODE` media types
+4. standalone `MediaFile` entities with their own `mediaFileId`, timestamps, and version
+5. loose file association back to `Media` through nullable `mediaId` and ordered hydrated reads
+6. a single-primary-file rule within each submitted `mediaFiles` list
+7. optional `parentId` with existence, self-reference, and cycle validation
+8. `ON DELETE SET NULL` parent cleanup behavior
+9. list filtering by `title`, `parentId`, `mediaType`, `status`, `language`, `releasedBefore`, and `releasedAfter`
+10. first-class `COLLECTION` and `EPISODE` media types
+11. optimistic concurrency on `PUT` via server-managed `Media.version`, plus file-version checks when existing files are referenced
 
 ## Known Follow-Up Areas
 
@@ -506,6 +587,7 @@ The next questions are now about breadth, not the baseline media contract:
 3. deeper hierarchy semantics such as seasons or track ordering
 4. stricter language-tag validation
 5. whether `PATCH` should supplement the current strict `PUT`
+6. dedicated standalone `MediaFile` endpoints now that files are no longer embedded persistence children
 
 ## Summary
 
